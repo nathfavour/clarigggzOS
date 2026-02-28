@@ -25,6 +25,7 @@ pub fn build(b: *std.Build) void {
         .optimize = optimize,
     });
     kernel_exe.addAssemblyFile(b.path("arch/riscv64/k1/boot.S"));
+    kernel_exe.addAssemblyFile(b.path("arch/riscv64/k1/switch.S"));
     kernel_exe.setLinkerScript(b.path("arch/riscv64/k1/kernel.ld"));
     kernel_exe.root_module.addImport("protocols", protocols_module);
     kernel_exe.want_lto = true;

@@ -17,9 +17,11 @@ const CoreBroker = struct {
 const memory = @import("memory.zig");
 const capability = @import("capability.zig");
 const ipc_transport = @import("ipc_transport.zig");
+const scheduler = @import("scheduler.zig");
 
 var kernel_heap: memory.KernelHeap = undefined;
 var ipc_router: ipc_transport.Router = undefined;
+var core_scheduler: scheduler.Scheduler = undefined;
 
 /// The Zig Entry Point from arch/riscv64/k1/boot.S
 export fn kmain() noreturn {
@@ -30,18 +32,34 @@ export fn kmain() noreturn {
     // 2. Initialize the IPC Router
     ipc_router = ipc_transport.Router.init(allocator);
 
-    // 3. Initialize the Root Capability List
+    // 3. Initialize the Scheduler
+    core_scheduler = scheduler.Scheduler.init(allocator);
+
+    // 4. Initialize the Root Capability List
     var root_clist = capability.CList.init(allocator, 64, 0) catch {
         while (true) {} // Kernel Panic: Failed to init root CList
     };
 
-    // 4. Create an initial system port
+    // 5. Create the first system thread (Primary Manager)
+    var root_thread = allocator.create(scheduler.Thread) catch {
+        while (true) {} // Kernel Panic
+    };
+    root_thread.* = scheduler.Thread.init(0, &root_clist, 0x801FFFFF, 0x80000000);
+    core_scheduler.addThread(root_thread) catch {};
+
+    // 6. Create an initial system port
     _ = ipc_router.createPort(0, &root_clist) catch {
         while (true) {} // Kernel Panic: Failed to create root port
     };
 
     // Core Loop: Dispatching to IPC routing and the scheduler.
     while (true) {
+        // Find next thread to run
+        if (core_scheduler.schedule()) |next_thread| {
+            _ = next_thread;
+            // TODO: Assembly-level context switch call
+        }
+
         // Article I: The Power Budget
         // Wait For Interrupt (WFI)
         asm volatile ("wfi");
