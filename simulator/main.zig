@@ -6,6 +6,9 @@ const Message = protocols.ipc.Message;
 const capability = @import("../core/capability.zig");
 const ipc_transport = @import("../core/ipc_transport.zig");
 
+const mmio = @import("mmio.zig");
+const irq_controller = @import("irq_controller.zig");
+
 pub fn main() !void {
     var gpa = std.heap.GeneralPurposeAllocator(.{}){};
     defer _ = gpa.deinit();
@@ -23,31 +26,48 @@ pub fn main() !void {
         router.ports.deinit();
     }
 
-    // 2. Initialize a Mock Process (e.g., Camera Adapter)
-    var camera_clist = try capability.CList.init(allocator, 16, 100);
-    defer allocator.free(camera_clist.caps);
+    // 2. Initialize Digital Twin Mocks
+    var mock_mmio = mmio.MMIO.init(allocator);
+    defer mock_mmio.deinit();
 
-    const camera_port = try router.createPort(100, &camera_clist);
-    std.debug.print("Created Camera Port: {}\n", .{camera_port});
+    var mock_irqc = try irq_controller.IRQController.init(allocator, 1024);
+    defer mock_irqc.deinit();
 
-    // 3. Simulated Event Loop
-    std.debug.print("Simulator active. Processing mock frames...\n", .{});
+    // 3. Initialize a Mock Process (e.g., Tactile ID Adapter)
+    var tactile_clist = try capability.CList.init(allocator, 16, 200);
+    defer allocator.free(tactile_clist.caps);
 
-    // Example: Push a simulated frame event
-    const msg = Message{
-        .sender_id = 100,
-        .protocol_id = 0xCAF1, // Mock DisplayPort Protocol
-        .payload_len = 0,
-        .capability_bits = 0,
-        .payload = [_]u8{0} ** 128,
-    };
+    const tactile_port = try router.createPort(200, &tactile_clist);
+    std.debug.print("Created Tactile Port: {}\n", .{tactile_port});
 
-    const port = router.ports.get(camera_port).?;
-    try port.push(msg);
+    // 4. Simulated Event Loop
+    std.debug.print("Simulator active. Digital Twin established.\n", .{});
 
-    // 4. Dispatch simulated messages
+    // Trigger a simulated tactile sensor interrupt (IRQ 7)
+    mock_irqc.raise(7);
+
+    // 5. Dispatch Loop: Core Broker checks for interrupts
+    if (mock_irqc.claim()) |irq| {
+        std.debug.print("Core Broker: Servicing IRQ {} from simulated hardware.\n", .{irq});
+        
+        // Example: Push an IPC event to the Tactile ID adapter in response to IRQ
+        const msg = Message{
+            .sender_id = 0, // From Kernel
+            .protocol_id = 0xCAF2, // InputPort
+            .payload_len = 0,
+            .capability_bits = 0,
+            .payload = [_]u8{0} ** 128,
+        };
+        const port = router.ports.get(tactile_port).?;
+        try port.push(msg);
+
+        mock_irqc.complete(irq);
+    }
+
+    // 6. Adapter Processes Message
+    const port = router.ports.get(tactile_port).?;
     if (port.pop()) |delivered| {
-        std.debug.print("Message dispatched: protocol=0x{X}\n", .{delivered.protocol_id});
+        std.debug.print("Tactile Adapter: Message received, protocol=0x{X}\n", .{delivered.protocol_id});
     }
 
     std.debug.print("Simulation complete.\n", .{});
