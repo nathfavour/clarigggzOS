@@ -18,10 +18,14 @@ const memory = @import("memory.zig");
 const capability = @import("capability.zig");
 const ipc_transport = @import("ipc_transport.zig");
 const scheduler = @import("scheduler.zig");
+const security = @import("security.zig");
+const physical_intent = @import("physical_intent.zig");
 
 var kernel_heap: memory.KernelHeap = undefined;
 var ipc_router: ipc_transport.Router = undefined;
 var core_scheduler: scheduler.Scheduler = undefined;
+var security_manager: security.SecurityManager = undefined;
+var tap_verifier: physical_intent.PhysicalSequenceVerifier = undefined;
 
 /// The Zig Entry Point from arch/riscv64/k1/boot.S
 export fn kmain() noreturn {
@@ -35,19 +39,23 @@ export fn kmain() noreturn {
     // 3. Initialize the Scheduler
     core_scheduler = scheduler.Scheduler.init(allocator);
 
-    // 4. Initialize the Root Capability List
+    // 4. Initialize Security Subsystems
+    security_manager = security.SecurityManager{};
+    tap_verifier = physical_intent.PhysicalSequenceVerifier{};
+
+    // 5. Initialize the Root Capability List
     var root_clist = capability.CList.init(allocator, 64, 0) catch {
         while (true) {} // Kernel Panic: Failed to init root CList
     };
 
-    // 5. Create the first system thread (Primary Manager)
+    // 6. Create the first system thread (Primary Manager)
     var root_thread = allocator.create(scheduler.Thread) catch {
         while (true) {} // Kernel Panic
     };
     root_thread.* = scheduler.Thread.init(0, &root_clist, 0x801FFFFF, 0x80000000);
     core_scheduler.addThread(root_thread) catch {};
 
-    // 6. Create an initial system port
+    // 7. Create an initial system port
     _ = ipc_router.createPort(0, &root_clist) catch {
         while (true) {} // Kernel Panic: Failed to create root port
     };
