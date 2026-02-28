@@ -1,2 +1,4 @@
 pub const ipc = @import("ipc.zig");
-// Add other protocol imports here as they are developed
+pub const display = @import("display.zig");
+pub const input = @import("input.zig");
+pub const neural = @import("neural.zig");
