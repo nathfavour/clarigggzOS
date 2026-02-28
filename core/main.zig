@@ -14,15 +14,22 @@ const CoreBroker = struct {
     }
 };
 
+/// The Zig Entry Point from arch/riscv64/k1/boot.S
+export fn kmain() noreturn {
+    // 1. Initial Serial Log (if UART were mapped)
+    // 2. Initialize Memory Allocator (Fixed pool)
+    // 3. Setup Page Tables (SV39)
+    // 4. Register Interrupt Vectors
+    
+    // Core Loop: Dispatching to IPC routing and the scheduler.
+    while (true) {
+        // Article I: The Power Budget
+        // Wait For Interrupt (WFI)
+        asm volatile ("wfi");
+    }
+}
+
 pub fn main() void {
-    // The kernel does not use a global allocator. Memory must be explicitly managed.
-    // In a real freestanding environment, we would use a fixed-size memory pool.
-    
-    // For now, this is a skeleton.
-    // In a real K1 boot sequence, we'd initialize the RVV extensions and page tables here.
-    
-    // while (true) {
-    //     // Wait for Interrupt (WFI)
-    //     asm volatile ("wfi");
-    // }
+    // This main is for simulation/unit testing if needed,
+    // but the actual kernel uses 'kmain' as the primary entry.
 }

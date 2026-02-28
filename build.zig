@@ -11,11 +11,19 @@ pub fn build(b: *std.Build) void {
         .target = b.resolveTargetQuery(.{
             .cpu_arch = .riscv64,
             .os_tag = .freestanding,
-            .cpu_model = .{ .explicit = &std.Target.riscv.cpu.generic_rv64 }, // TODO: Refine for K1/RVV 1.0
+            .cpu_model = .{ .explicit = &std.Target.riscv.cpu.generic_rv64 }, 
+            .cpu_features_add = std.Target.riscv.featureSet(&.{.v}), // Enable RVV 1.0
         }),
         .optimize = optimize,
     });
+
+    // Core kernel setup
+    kernel_exe.addAssemblyFile(b.path("arch/riscv64/k1/boot.S"));
+    kernel_exe.setLinkerScript(b.path("arch/riscv64/k1/kernel.ld"));
+    kernel_exe.want_lto = true; // Optimization: Link-Time Optimization
+
     b.installArtifact(kernel_exe);
+
 
     // --- x86_64 Simulator (simulator/) ---
     const simulator_exe = b.addExecutable(.{
