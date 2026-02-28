@@ -34,6 +34,32 @@ pub fn build(b: *std.Build) void {
     const kernel_step = b.step("kernel", "Build the Clarigggz RISC-V K1 Kernel");
     kernel_step.dependOn(&install_kernel.step);
 
+    // --- Components (User-Space Adapters) ---
+    const component_targets = [_]struct { name: []const u8, path: []const u8 }{
+        .{ .name = "compositor", .path = "components/compositor/main.zig" },
+        .{ .name = "tactile-id", .path = "components/tactile_id/main.zig" },
+        .{ .name = "neural-engine", .path = "components/neural/main.zig" },
+    };
+
+    const components_step = b.step("components", "Build all user-space adapters");
+
+    for (component_targets) |target_info| {
+        const comp_exe = b.addExecutable(.{
+            .name = b.fmt("clarigggz-{s}", .{target_info.name}),
+            .root_source_file = b.path(target_info.path),
+            .target = b.resolveTargetQuery(.{
+                .cpu_arch = .riscv64,
+                .os_tag = .freestanding, // Simplified: will be Clarigggz OS tag in future
+                .cpu_model = .{ .explicit = &std.Target.riscv.cpu.generic_rv64 },
+                .cpu_features_add = std.Target.riscv.featureSet(&.{.v}),
+            }),
+            .optimize = optimize,
+        });
+        comp_exe.root_module.addImport("protocols", protocols_module);
+        const install_comp = b.addInstallArtifact(comp_exe, .{});
+        components_step.dependOn(&install_comp.step);
+    }
+
     // --- x86_64 Simulator ---
     const simulator_exe = b.addExecutable(.{
         .name = "clarigggz-simulator",
