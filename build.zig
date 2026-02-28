@@ -4,6 +4,9 @@ pub fn build(b: *std.Build) void {
     const target = b.standardTargetOptions(.{});
     const optimize = b.standardOptimizeOption(.{});
 
+    // Set the install prefix to 'bin/' as mandated by AGENTS.md
+    b.install_path = "bin";
+
     // --- Clarigggz Microkernel (core/) ---
     const kernel_exe = b.addExecutable(.{
         .name = "clarigggz-kernel",
