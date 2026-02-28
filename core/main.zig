@@ -49,6 +49,50 @@ export fn kmain() noreturn {
 }
 
 pub fn main() void {
-    // This main is for simulation/unit testing if needed,
-    // but the actual kernel uses 'kmain' as the primary entry.
+    // Standard Zig main for simulation or unit testing
+}
+
+test "IPC Router - Port Creation and Message Delivery" {
+    const allocator = std.testing.allocator;
+    
+    // 1. Setup subsystems
+    var router = ipc_transport.Router.init(allocator);
+    defer {
+        var it = router.ports.iterator();
+        while (it.next()) |entry| {
+            allocator.destroy(entry.value_ptr.*);
+        }
+        router.ports.deinit();
+    }
+
+    var clist = try capability.CList.init(allocator, 4, 1);
+    defer allocator.free(clist.caps);
+
+    // 2. Create a port
+    const port_id = try router.createPort(1, &clist);
+    
+    // 3. Grant capability to send to this port
+    clist.caps[0] = .{
+        .cap_type = .ipc_endpoint,
+        .rights = capability.Capability.Rights.write,
+        .object_id = @as(u24, @intCast(port_id)),
+        .base = 0,
+        .limit = 0,
+    };
+
+    // 4. Send a message
+    const msg = protocols.ipc.Message{
+        .sender_id = 1,
+        .protocol_id = 42,
+        .payload_len = 0,
+        .capability_bits = 0,
+        .payload = [_]u8{0} ** 128,
+    };
+
+    try router.deliver(&clist, 0, msg);
+
+    // 5. Verify delivery
+    const port = router.ports.get(port_id).?;
+    const delivered = port.pop().?;
+    try std.testing.expectEqual(delivered.protocol_id, 42);
 }
