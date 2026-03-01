@@ -52,7 +52,7 @@ export fn kmain() noreturn {
     var root_thread = allocator.create(scheduler.Thread) catch {
         while (true) {} // Kernel Panic
     };
-    root_thread.* = scheduler.Thread.init(0, &root_clist, 0x801FFFFF, 0x80000000);
+    root_thread.* = scheduler.Thread.init(0, &root_clist, null, 0x801FFFFF, 0x80000000);
     core_scheduler.addThread(root_thread) catch {};
 
     // 7. Create an initial system port

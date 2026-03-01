@@ -1,5 +1,6 @@
 const std = @import("std");
 const capability = @import("capability.zig");
+const paging = @import("paging.zig");
 
 /// RISC-V 64-bit Register Context
 pub const Context = struct {
@@ -11,6 +12,7 @@ pub const Context = struct {
     // CSRs
     mstatus: u64 = 0,
     mepc: u64 = 0,
+    satp: u64 = 0, // Page Table Root
 
     // Vector Status (RVV 1.0)
     vtype: u64 = 0,
@@ -32,6 +34,7 @@ pub const Thread = struct {
     state: ThreadState,
     context: Context,
     clist: *capability.CList,
+    aspace: ?paging.AddressSpace = null, // Isolated Virtual Memory
     stack_base: usize,
     stack_size: usize,
     
@@ -39,10 +42,13 @@ pub const Thread = struct {
     // to optimize context switch overhead.
     uses_vectors: bool = false,
 
-    pub fn init(id: u32, clist: *capability.CList, stack_ptr: usize, entry_point: usize) Thread {
+    pub fn init(id: u32, clist: *capability.CList, aspace: ?paging.AddressSpace, stack_ptr: usize, entry_point: usize) Thread {
         var ctx = Context{};
         ctx.sp = stack_ptr;
         ctx.mepc = entry_point;
+        if (aspace) |as| {
+            ctx.satp = as.satp();
+        }
         // Set mstatus.MPP = 01 (Supervisor) or 00 (User) and enable interrupts (MPIE)
         ctx.mstatus = 0x00001880; 
 
@@ -51,6 +57,7 @@ pub const Thread = struct {
             .state = .ready,
             .context = ctx,
             .clist = clist,
+            .aspace = aspace,
             .stack_base = stack_ptr - 4096, // Simplified stack tracking
             .stack_size = 4096,
         };
