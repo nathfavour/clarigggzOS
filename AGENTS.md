@@ -1,27 +1,27 @@
-# Clarigggz OS Agent Directives (AGENTS.md)
+# Clarigggz OS: Agent Governance 🤖
 
-As an AI agent contributing to Clarigggz OS, you are a co-architect of a high-performance, sovereign system. You MUST strictly adhere to these operational mandates. Failure to do so is a breach of the Engineering Constitution.
+Welcome, Agent. You are operating within the **Clarigggz OS** monorepo. This project is a radical, from-scratch hexagonal microkernel for the Spacemit K1 (RISC-V 64).
 
-## I. Build Invariance
-1. **Source Tree Purity**: NEVER create build objects, temporary files, or executables within the codebase. 
-2. **Build Output Isolation**: All build outputs MUST reside within the `bin/` directory. If a tool or script generates output elsewhere, it is your responsibility to move it or reconfigure the build to respect `bin/`.
-3. **Git Hygiene**: `bin/` must always be ignored in `.gitignore`. Never attempt to stage or commit files from this directory.
+## 🎯 The Mission
+Your goal is to assist in building the "Spatial Sovereign"—a low-latency, secure foundation for the post-smartphone world. 
 
-## II. Architectural Integrity
-1. **Zero-Cost Abstraction**: Every line of Zig must have a clear, deterministic cost. Avoid hidden control flow or runtime overhead.
-2. **Capability-First Security**: Never implement a feature that bypasses the `CList` (Capability List) model. Every interaction between "Adapters" must be routed through the Core Broker's IPC.
-3. **Vector Supremacy**: For any computational task (Vision, NLP, Matrix math), you MUST prioritize **RVV 1.0 (RISC-V Vector)** intrinsics. Generic scalar fallbacks are prohibited in performance-critical paths.
+## 🛠 Technical Mandates
+- **Language**: Zig 0.16.0 (Strict adherence).
+- **Architecture**: Hexagonal Microkernel (Core Broker vs. User-space Adapters).
+- **Vector Mastery**: Prioritize RVV 1.0 intrinsics for all neural/tensor operations.
+- **Safety**: Capability-based security (C-lists). No hidden allocations.
 
-## III. Protocol Atomic Updates
-1. **Total Synchronization**: A change to a protocol in `protocols/` MUST be accompanied by simultaneous updates to:
-   - The Core Broker's router (`core/`).
-   - All affected User-Space Adapters (`components/`).
-   - The x86_64 Simulator mocks (`simulator/`).
-2. **Validation**: Before declaring a task complete, you must verify that the change is functionally identical across both the bare-metal K1 target and the Simulator.
+## 📚 Documentation Strategy (Crucial)
+This project maintains a local documentation cache for reliability and version-pinning.
 
-## IV. Documentation & Memory
-1. **Docs-as-Code**: Every architectural shift or protocol change must be documented in the Docusaurus suite (`docs/`).
-2. **The Sovereign Voice**: Maintain the high-signal, professional, and visionary tone established in the `README.md` and `CONSTITUTION.md`.
+1.  **Language Reference**: Always consult `.docs/index.html` first for Zig language semantics. This is a work-in-progress; as we upgrade Zig versions, we update this file.
+2.  **Standard Library (std)**: For `std` usage, do **not** guess. Consult the source code directly from the local Zig installation.
+    - Path: `${ZIG_LIB_DIR}/std/`
+3.  **Project Architecture**: Read `docs/docs/ARCHITECTURE.md` and `docs/docs/CONSTITUTION.md` before proposing structural changes.
 
----
-*The future is RISC-V. The future is Clarigggz. Build with precision or do not build at all.*
+## 🧩 Agent Skills
+We use specialized skills to maintain monorepo integrity:
+
+- **consult-docs**: Mandates using `.docs/index.html` for Zig 0.16.0 language features. (WIP: Updates with every Zig version bump).
+- **consult-std**: Directions for looking up `std` source in the local installation (e.g., `/home/nathfavour/.local/share/zigup/0.16.0/files/lib/std`).
+- **vector-mastery**: Strict enforcement of RVV 1.0 for neural/tensor performance.
