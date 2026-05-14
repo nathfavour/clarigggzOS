@@ -26,12 +26,12 @@ pub fn build(b: *std.Build) void {
             .optimize = optimize,
         }),
     });
-    kernel_exe.addAssemblyFile(b.path("arch/riscv64/k1/boot.S"));
-    kernel_exe.addAssemblyFile(b.path("arch/riscv64/k1/switch.S"));
-    kernel_exe.addAssemblyFile(b.path("arch/riscv64/k1/trap.S"));
+    kernel_exe.root_module.addAssemblyFile(b.path("arch/riscv64/k1/boot.S"));
+    kernel_exe.root_module.addAssemblyFile(b.path("arch/riscv64/k1/switch.S"));
+    kernel_exe.root_module.addAssemblyFile(b.path("arch/riscv64/k1/trap.S"));
     kernel_exe.setLinkerScript(b.path("arch/riscv64/k1/kernel.ld"));
     kernel_exe.root_module.addImport("protocols", protocols_module);
-    kernel_exe.want_lto = true;
+    kernel_exe.lto = .full;
 
     const install_kernel = b.addInstallArtifact(kernel_exe, .{});
     const kernel_step = b.step("kernel", "Build the Clarigggz RISC-V K1 Kernel");

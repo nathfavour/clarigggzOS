@@ -20,6 +20,9 @@ pub const Result = struct {
 /// Dispatcher for system calls coming from user-space (ecall).
 pub const Dispatcher = struct {
     pub fn handle(call_num: u64, a1: u64, a2: u64, a3: u64) Result {
+        _ = a1;
+        _ = a2;
+        _ = a3;
         const syscall = std.meta.intToEnum(Syscall, call_num) catch return .{ .code = 1, .data = 0 };
 
         switch (syscall) {

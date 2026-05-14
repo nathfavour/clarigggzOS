@@ -79,7 +79,7 @@ export fn kmain() noreturn {
     };
 
     // 6. Create the first system thread (Primary Manager)
-    var root_thread = allocator.create(scheduler.Thread) catch {
+    const root_thread = allocator.create(scheduler.Thread) catch {
         while (true) {} // Kernel Panic
     };
     root_thread.* = scheduler.Thread.init(0, &root_clist, null, 0x801FFFFF, 0x80000000);

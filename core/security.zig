@@ -35,7 +35,6 @@ pub const SecurityManager = struct {
         _ = self;
         // In a real K1 implementation, this would write to a protected MMIO region
         // or a dedicated secure flash partition.
-        // std.debug.print("LIABILITY SHIFT: User has assumed full hardware control.
-", .{});
+        // std.debug.print("LIABILITY SHIFT: User has assumed full hardware control.\n", .{});
     }
 };
