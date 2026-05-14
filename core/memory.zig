@@ -35,26 +35,32 @@ pub const KernelHeap = struct {
             .vtable = &.{
                 .alloc = alloc_adapter,
                 .resize = resize_adapter,
+                .remap = remap_adapter,
                 .free = free_adapter,
             },
         };
     }
 
-    fn alloc_adapter(ctx: *anyopaque, len: usize, ptr_align: u8, ret_addr: usize) ?[*]u8 {
+    fn alloc_adapter(ctx: *anyopaque, len: usize, ptr_align: std.mem.Alignment, ret_addr: usize) ?[*]u8 {
         _ = ret_addr;
         const self: *KernelHeap = @ptrCast(@alignCast(ctx));
-        const alignment = @as(usize, 1) << @as(u6, @truncate(ptr_align));
+        const alignment = ptr_align.toByteUnits();
         const result = self.alloc(len, alignment);
         return if (result) |r| r.ptr else null;
     }
 
-    fn resize_adapter(ctx: *anyopaque, buf: []u8, buf_align: u8, new_len: usize, ret_addr: usize) bool {
+    fn resize_adapter(ctx: *anyopaque, buf: []u8, buf_align: std.mem.Alignment, new_len: usize, ret_addr: usize) bool {
         _ = ctx; _ = buf; _ = buf_align; _ = new_len; _ = ret_addr;
         return false; // Resize not supported in bump allocator
     }
 
-    fn free_adapter(ctx: *anyopaque, buf: []u8, buf_align: u8, ret_addr: usize) void {
+    fn free_adapter(ctx: *anyopaque, buf: []u8, buf_align: std.mem.Alignment, ret_addr: usize) void {
         _ = ctx; _ = buf; _ = buf_align; _ = ret_addr;
         // Free not supported in bump allocator
+    }
+
+    fn remap_adapter(ctx: *anyopaque, buf: []u8, buf_align: std.mem.Alignment, new_len: usize, ret_addr: usize) ?[*]u8 {
+        _ = ctx; _ = buf; _ = buf_align; _ = new_len; _ = ret_addr;
+        return null;
     }
 };

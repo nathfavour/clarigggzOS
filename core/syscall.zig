@@ -23,7 +23,7 @@ pub const Dispatcher = struct {
         _ = a1;
         _ = a2;
         _ = a3;
-        const syscall = std.meta.intToEnum(Syscall, call_num) catch return .{ .code = 1, .data = 0 };
+        const syscall = std.enums.fromInt(Syscall, call_num) orelse return .{ .code = 1, .data = 0 };
 
         switch (syscall) {
             .ipc_send => {

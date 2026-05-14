@@ -2,14 +2,17 @@ const std = @import("std");
 const protocols = @import("protocols");
 const Message = protocols.ipc.Message;
 
+const builtin = @import("builtin");
+
 /// Microkernel state
 const CoreBroker = struct {
     // Basic scheduler and memory state for the K1 core.
     capabilities: std.ArrayList(u64), // Placeholder for actual C-list management.
     
     pub fn init(allocator: std.mem.Allocator) CoreBroker {
+        _ = allocator;
         return .{
-            .capabilities = std.ArrayList(u64).init(allocator),
+            .capabilities = .empty,
         };
     }
 };
@@ -100,7 +103,9 @@ export fn kmain() noreturn {
 
         // Article I: The Power Budget
         // Wait For Interrupt (WFI)
-        asm volatile ("wfi");
+        if (builtin.cpu.arch == .riscv64) {
+            asm volatile ("wfi");
+        }
     }
 }
 

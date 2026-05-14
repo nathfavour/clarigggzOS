@@ -71,13 +71,13 @@ pub const Scheduler = struct {
 
     pub fn init(allocator: std.mem.Allocator) Scheduler {
         return .{
-            .threads = std.ArrayList(*Thread).init(allocator),
+            .threads = .empty,
             .allocator = allocator,
         };
     }
 
     pub fn addThread(self: *Scheduler, thread: *Thread) !void {
-        try self.threads.append(thread);
+        try self.threads.append(self.allocator, thread);
     }
 
     /// Basic Round-Robin Scheduler for the Core Broker.
