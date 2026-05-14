@@ -15,17 +15,20 @@ pub fn build(b: *std.Build) void {
     // --- Clarigggz Microkernel (RISC-V K1) ---
     const kernel_exe = b.addExecutable(.{
         .name = "clarigggz-kernel",
-        .root_source_file = b.path("core/main.zig"),
-        .target = b.resolveTargetQuery(.{
-            .cpu_arch = .riscv64,
-            .os_tag = .freestanding,
-            .cpu_model = .{ .explicit = &std.Target.riscv.cpu.generic_rv64 }, 
-            .cpu_features_add = std.Target.riscv.featureSet(&.{.v}), // Enable RVV 1.0
+        .root_module = b.createModule(.{
+            .root_source_file = b.path("core/main.zig"),
+            .target = b.resolveTargetQuery(.{
+                .cpu_arch = .riscv64,
+                .os_tag = .freestanding,
+                .cpu_model = .{ .explicit = &std.Target.riscv.cpu.generic_rv64 }, 
+                .cpu_features_add = std.Target.riscv.featureSet(&.{.v}), // Enable RVV 1.0
+            }),
+            .optimize = optimize,
         }),
-        .optimize = optimize,
     });
     kernel_exe.addAssemblyFile(b.path("arch/riscv64/k1/boot.S"));
     kernel_exe.addAssemblyFile(b.path("arch/riscv64/k1/switch.S"));
+    kernel_exe.addAssemblyFile(b.path("arch/riscv64/k1/trap.S"));
     kernel_exe.setLinkerScript(b.path("arch/riscv64/k1/kernel.ld"));
     kernel_exe.root_module.addImport("protocols", protocols_module);
     kernel_exe.want_lto = true;
@@ -46,14 +49,16 @@ pub fn build(b: *std.Build) void {
     for (component_targets) |target_info| {
         const comp_exe = b.addExecutable(.{
             .name = b.fmt("clarigggz-{s}", .{target_info.name}),
-            .root_source_file = b.path(target_info.path),
-            .target = b.resolveTargetQuery(.{
-                .cpu_arch = .riscv64,
-                .os_tag = .freestanding, // Simplified: will be Clarigggz OS tag in future
-                .cpu_model = .{ .explicit = &std.Target.riscv.cpu.generic_rv64 },
-                .cpu_features_add = std.Target.riscv.featureSet(&.{.v}),
+            .root_module = b.createModule(.{
+                .root_source_file = b.path(target_info.path),
+                .target = b.resolveTargetQuery(.{
+                    .cpu_arch = .riscv64,
+                    .os_tag = .freestanding, // Simplified: will be Clarigggz OS tag in future
+                    .cpu_model = .{ .explicit = &std.Target.riscv.cpu.generic_rv64 },
+                    .cpu_features_add = std.Target.riscv.featureSet(&.{.v}),
+                }),
+                .optimize = optimize,
             }),
-            .optimize = optimize,
         });
         comp_exe.root_module.addImport("protocols", protocols_module);
         const install_comp = b.addInstallArtifact(comp_exe, .{});
@@ -63,9 +68,11 @@ pub fn build(b: *std.Build) void {
     // --- x86_64 Simulator ---
     const simulator_exe = b.addExecutable(.{
         .name = "clarigggz-simulator",
-        .root_source_file = b.path("simulator/main.zig"),
-        .target = target,
-        .optimize = optimize,
+        .root_module = b.createModule(.{
+            .root_source_file = b.path("simulator/main.zig"),
+            .target = target,
+            .optimize = optimize,
+        }),
     });
     simulator_exe.root_module.addImport("protocols", protocols_module);
     
@@ -79,9 +86,11 @@ pub fn build(b: *std.Build) void {
 
     // --- Unit Tests ---
     const tests = b.addTest(.{
-        .root_source_file = b.path("core/main.zig"),
-        .target = target,
-        .optimize = optimize,
+        .root_module = b.createModule(.{
+            .root_source_file = b.path("core/main.zig"),
+            .target = target,
+            .optimize = optimize,
+        }),
     });
     tests.root_module.addImport("protocols", protocols_module);
 

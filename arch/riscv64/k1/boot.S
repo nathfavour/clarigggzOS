@@ -18,7 +18,11 @@ _start:
     li t1, 0x00000600 # VS bits in mstatus
     csrs mstatus, t1
 
-    # 4. Initialize Stack Pointer
+    # 4. Register Trap Vector
+    la t0, trap_entry
+    csrw stvec, t0
+
+    # 5. Initialize Stack Pointer
     la sp, _boot_stack_top
 
     # 5. Zero out BSS

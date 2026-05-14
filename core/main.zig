@@ -27,8 +27,38 @@ var core_scheduler: scheduler.Scheduler = undefined;
 var security_manager: security.SecurityManager = undefined;
 var tap_verifier: physical_intent.PhysicalSequenceVerifier = undefined;
 
+const syscall = @import("syscall.zig");
+
+/// The primary trap handler called from arch/riscv64/k1/trap.S
+export fn k_trap_handler(scause: u64, sepc: u64, stval: u64) void {
+    const is_interrupt = (scause >> 63) == 1;
+    const code = scause & 0xFFF;
+
+    if (is_interrupt) {
+        // Handle Hardware Interrupts (PLIC/CLINT)
+    } else {
+        // Handle Synchronous Traps (Syscalls, Faults)
+        if (code == 8 or code == 9) { // Environment Call (User or Supervisor)
+            // Syscall logic here
+            // We would read registers a7 (syscall num), a0, a1, a2 (args)
+            // from the thread's saved context.
+            
+            // For now, mock a call to the dispatcher
+            _ = syscall.Dispatcher.handle(0, 0, 0, 0);
+            
+            // Increment sepc to point to the instruction after ecall
+            _ = sepc; // In a real system, we'd update thread.context.mepc
+        } else {
+            // Memory Fault or Illegal Instruction
+            while (true) {} // Kernel Panic
+        }
+    }
+    _ = stval;
+}
+
 /// The Zig Entry Point from arch/riscv64/k1/boot.S
 export fn kmain() noreturn {
+    // ... rest of init ...
     // 1. Initialize Kernel Heap (1MB for early boot)
     kernel_heap = memory.KernelHeap.init(0x80100000, 1024);
     const allocator = kernel_heap.allocator();

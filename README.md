@@ -35,7 +35,7 @@ Clarigggz OS is evolving toward a post-smartphone world:
 ## 🛠 For the Engineers
 
 ### Prerequisites
-- **Zig (Master/0.13.0)**: The only tool you need to build the world.
+- **Zig (0.16.0)**: The only tool you need to build the world.
 
 ### The Simulator (x86_64)
 Rapidly iterate on protocol logic without flashing hardware. The simulator is a first-class citizen.
