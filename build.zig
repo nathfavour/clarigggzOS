@@ -108,8 +108,14 @@ pub fn build(b: *std.Build) void {
     // --- ISO Build Step (Unified BSD System Image Packaging) ---
     const iso_step = b.step("iso", "Package Clarigggz OS into a bootable ISO image");
     
-    const mkdir_cmd = b.addSystemCommand(&.{ "mkdir", "-p", "bin/iso_root/boot/grub" });
-    const cp_kernel = b.addSystemCommand(&.{ "cp", "bin/clarigggz-kernel", "bin/iso_root/boot/" });
+    const kernel_path = b.getInstallPath(.bin, "clarigggz-kernel");
+    const iso_root_path = b.getInstallPath(.prefix, "iso_root");
+    const boot_dir_path = b.getInstallPath(.prefix, "iso_root/boot");
+    const grub_dir_path = b.getInstallPath(.prefix, "iso_root/boot/grub");
+    const iso_out_path = b.getInstallPath(.prefix, "clarigggz.iso");
+
+    const mkdir_cmd = b.addSystemCommand(&.{ "mkdir", "-p", grub_dir_path });
+    const cp_kernel = b.addSystemCommand(&.{ "cp", kernel_path, boot_dir_path });
     cp_kernel.step.dependOn(&install_kernel.step);
     cp_kernel.step.dependOn(&mkdir_cmd.step);
 
@@ -119,10 +125,10 @@ pub fn build(b: *std.Build) void {
         \\    boot
         \\}
     ;
-    const write_grub = b.addSystemCommand(&.{ "sh", "-c", b.fmt("echo '{s}' > bin/iso_root/boot/grub/grub.cfg", .{grub_cfg_content}) });
+    const write_grub = b.addSystemCommand(&.{ "sh", "-c", b.fmt("echo '{s}' > {s}/grub.cfg", .{grub_cfg_content, grub_dir_path}) });
     write_grub.step.dependOn(&cp_kernel.step);
 
-    const mkrescue = b.addSystemCommand(&.{ "grub-mkrescue", "-o", "bin/clarigggz.iso", "bin/iso_root" });
+    const mkrescue = b.addSystemCommand(&.{ "grub-mkrescue", "-o", iso_out_path, iso_root_path });
     mkrescue.step.dependOn(&write_grub.step);
 
     iso_step.dependOn(&mkrescue.step);
