@@ -23,7 +23,6 @@ pub const MMIO = struct {
 
     pub fn write32(self: *MMIO, address: u64, value: u32) !void {
         try self.registers.put(address, value);
-        // std.debug.print("[Simulator MMIO] Write to 0x{X}: 0x{X}
-", .{address, value});
+        // std.debug.print("[Simulator MMIO] Write to 0x{X}: 0x{X}\n", .{address, value});
     }
 };

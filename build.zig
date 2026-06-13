@@ -12,6 +12,11 @@ pub fn build(b: *std.Build) void {
         .root_source_file = b.path("protocols/root.zig"),
     });
 
+    const core_module = b.addModule("core", .{
+        .root_source_file = b.path("core/main.zig"),
+    });
+    core_module.addImport("protocols", protocols_module);
+
     // --- Clarigggz Microkernel (RISC-V K1) ---
     const kernel_exe = b.addExecutable(.{
         .name = "clarigggz-kernel",
@@ -75,6 +80,7 @@ pub fn build(b: *std.Build) void {
         }),
     });
     simulator_exe.root_module.addImport("protocols", protocols_module);
+    simulator_exe.root_module.addImport("core", core_module);
     
     const install_simulator = b.addInstallArtifact(simulator_exe, .{});
     const simulator_step = b.step("simulator", "Build the Clarigggz Simulator (x86_64)");

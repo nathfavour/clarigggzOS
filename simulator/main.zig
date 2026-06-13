@@ -3,14 +3,15 @@ const protocols = @import("protocols");
 const Message = protocols.ipc.Message;
 
 // The simulator needs to pull in the core logic to mock the kernel on x86_64
-const capability = @import("../core/capability.zig");
-const ipc_transport = @import("../core/ipc_transport.zig");
+const core = @import("core");
+const capability = core.capability;
+const ipc_transport = core.ipc_transport;
 
 const mmio = @import("mmio.zig");
 const irq_controller = @import("irq_controller.zig");
 
 pub fn main() !void {
-    var gpa = std.heap.GeneralPurposeAllocator(.{}){};
+    var gpa = std.GeneralPurposeAllocator(.{}){};
     defer _ = gpa.deinit();
     const allocator = gpa.allocator();
 

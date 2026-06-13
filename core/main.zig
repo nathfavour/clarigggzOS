@@ -17,12 +17,12 @@ const CoreBroker = struct {
     }
 };
 
-const memory = @import("memory.zig");
-const capability = @import("capability.zig");
-const ipc_transport = @import("ipc_transport.zig");
-const scheduler = @import("scheduler.zig");
-const security = @import("security.zig");
-const physical_intent = @import("physical_intent.zig");
+pub const memory = @import("memory.zig");
+pub const capability = @import("capability.zig");
+pub const ipc_transport = @import("ipc_transport.zig");
+pub const scheduler = @import("scheduler.zig");
+pub const security = @import("security.zig");
+pub const physical_intent = @import("physical_intent.zig");
 
 var kernel_heap: memory.KernelHeap = undefined;
 var ipc_router: ipc_transport.Router = undefined;
