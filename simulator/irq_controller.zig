@@ -21,8 +21,7 @@ pub const IRQController = struct {
     pub fn raise(self: *IRQController, irq: usize) void {
         if (irq < self.pending_irqs.capacity()) {
             self.pending_irqs.set(irq);
-            // std.debug.print("[Simulator IRQ] Raised IRQ: {}
-", .{irq});
+            // std.debug.print("[Simulator IRQ] Raised IRQ: {}\n", .{irq});
         }
     }
 
