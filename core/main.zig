@@ -147,9 +147,11 @@ export fn kmain() noreturn {
         }
 
         // Article I: The Power Budget
-        // Wait For Interrupt (WFI)
+        // Wait For Interrupt (WFI / HLT)
         if (builtin.cpu.arch == .riscv64) {
             asm volatile ("wfi");
+        } else if (builtin.cpu.arch == .x86_64) {
+            asm volatile ("hlt");
         }
     }
 }

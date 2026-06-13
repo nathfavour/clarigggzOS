@@ -2,6 +2,10 @@ const std = @import("std");
 const protocols = @import("protocols");
 const NeuralPort = protocols.neural.NeuralPort;
 
+// Disable threaded IO dependencies for freestanding targets
+pub const std_options_debug_threaded_io: ?*anyopaque = null;
+
+
 /// Neural Accelerator Server: RISC-V Vector Optimized Tensor Operations.
 /// This adapter runs on user-space with privileged access to RVV 1.0 extensions.
 pub fn main() !void {

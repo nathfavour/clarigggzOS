@@ -1,8 +1,10 @@
 const std = @import("std");
 
 pub fn build(b: *std.Build) void {
+    // --- Target Configuration ---
     const target = b.standardTargetOptions(.{});
     const optimize = b.standardOptimizeOption(.{});
+    const target_info = target.result;
 
     // Set the install prefix to 'bin/' as mandated by AGENTS.md
     b.install_path = "bin";
@@ -17,30 +19,41 @@ pub fn build(b: *std.Build) void {
     });
     core_module.addImport("protocols", protocols_module);
 
-    // --- Clarigggz Microkernel (RISC-V K1) ---
+    // --- Clarigggz Microkernel ---
     const kernel_exe = b.addExecutable(.{
         .name = "clarigggz-kernel",
         .root_module = b.createModule(.{
             .root_source_file = b.path("core/main.zig"),
-            .target = b.resolveTargetQuery(.{
-                .cpu_arch = .riscv64,
-                .os_tag = .freestanding,
-                .cpu_model = .{ .explicit = &std.Target.riscv.cpu.generic_rv64 }, 
-                .cpu_features_add = std.Target.riscv.featureSet(&.{.v}), // Enable RVV 1.0
-            }),
+            .target = target,
             .optimize = optimize,
-            .code_model = .medany,
         }),
     });
-    kernel_exe.root_module.addAssemblyFile(b.path("arch/riscv64/k1/boot.S"));
-    kernel_exe.root_module.addAssemblyFile(b.path("arch/riscv64/k1/switch.S"));
-    kernel_exe.root_module.addAssemblyFile(b.path("arch/riscv64/k1/trap.S"));
-    kernel_exe.setLinkerScript(b.path("arch/riscv64/k1/kernel.ld"));
+
+
+    // Dynamically apply architecture-specific boot code and linker scripts
+    switch (target_info.cpu.arch) {
+        .riscv64 => {
+            kernel_exe.root_module.addAssemblyFile(b.path("arch/riscv64/k1/boot.S"));
+            kernel_exe.root_module.addAssemblyFile(b.path("arch/riscv64/k1/switch.S"));
+            kernel_exe.root_module.addAssemblyFile(b.path("arch/riscv64/k1/trap.S"));
+            kernel_exe.setLinkerScript(b.path("arch/riscv64/k1/kernel.ld"));
+            kernel_exe.root_module.code_model = .medany;
+        },
+        .x86_64 => {
+            kernel_exe.root_module.addAssemblyFile(b.path("arch/x86_64/boot.S"));
+            kernel_exe.setLinkerScript(b.path("arch/x86_64/kernel.ld"));
+        },
+        else => {
+            // Default generic fallback
+        },
+    }
+
     kernel_exe.root_module.addImport("protocols", protocols_module);
-    kernel_exe.lto = .full;
+    kernel_exe.lto = .none;
+
 
     const install_kernel = b.addInstallArtifact(kernel_exe, .{});
-    const kernel_step = b.step("kernel", "Build the Clarigggz RISC-V K1 Kernel");
+    const kernel_step = b.step("kernel", "Build the Clarigggz Microkernel");
     kernel_step.dependOn(&install_kernel.step);
 
     // --- Components (User-Space Adapters) ---
@@ -52,17 +65,12 @@ pub fn build(b: *std.Build) void {
 
     const components_step = b.step("components", "Build all user-space adapters");
 
-    for (component_targets) |target_info| {
+    for (component_targets) |target_info_item| {
         const comp_exe = b.addExecutable(.{
-            .name = b.fmt("clarigggz-{s}", .{target_info.name}),
+            .name = b.fmt("clarigggz-{s}", .{target_info_item.name}),
             .root_module = b.createModule(.{
-                .root_source_file = b.path(target_info.path),
-                .target = b.resolveTargetQuery(.{
-                    .cpu_arch = .riscv64,
-                    .os_tag = .freestanding, // Simplified: will be Clarigggz OS tag in future
-                    .cpu_model = .{ .explicit = &std.Target.riscv.cpu.generic_rv64 },
-                    .cpu_features_add = std.Target.riscv.featureSet(&.{.v}),
-                }),
+                .root_source_file = b.path(target_info_item.path),
+                .target = target,
                 .optimize = optimize,
             }),
         });
@@ -70,6 +78,7 @@ pub fn build(b: *std.Build) void {
         const install_comp = b.addInstallArtifact(comp_exe, .{});
         components_step.dependOn(&install_comp.step);
     }
+
 
     const compositor_module = b.addModule("compositor", .{
         .root_source_file = b.path("components/compositor/main.zig"),

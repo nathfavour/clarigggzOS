@@ -2,6 +2,10 @@ const std = @import("std");
 const protocols = @import("protocols");
 const InputPort = protocols.input.InputPort;
 
+// Disable threaded IO dependencies for freestanding targets
+pub const std_options_debug_threaded_io: ?*anyopaque = null;
+
+
 /// Tactile ID Server: Biometric and Physical Intent Verification.
 /// An unprivileged user-space adapter server.
 pub fn main() !void {

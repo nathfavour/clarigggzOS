@@ -3,6 +3,10 @@ const protocols = @import("protocols");
 const DisplayPort = protocols.display.DisplayPort;
 const Message = protocols.ipc.Message;
 
+// Disable threaded IO dependencies for freestanding targets
+pub const std_options_debug_threaded_io: ?*anyopaque = null;
+
+
 /// Window structure for display environment
 pub const Window = struct {
     title: []const u8,
@@ -110,7 +114,15 @@ pub const DesktopEnvironment = struct {
 
         // 4. Print the buffer
         for (0..24) |y| {
-            std.debug.print("{s}\n", .{buffer[y][0..80]});
+            if (comptime @import("builtin").os.tag != .freestanding) {
+                std.debug.print("{s}\n", .{buffer[y][0..80]});
+            } else {
+                const uart_ptr: *volatile u8 = @ptrFromInt(0x10000000);
+                for (buffer[y][0..80]) |c| {
+                    uart_ptr.* = c;
+                }
+                uart_ptr.* = '\n';
+            }
         }
     }
 };
