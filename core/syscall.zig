@@ -68,7 +68,9 @@ pub const Dispatcher = struct {
                 const str_ptr = @as([*]const u8, @ptrFromInt(a1));
                 const len: usize = a2;
                 // Safely log user string
-                std.debug.print("[Syscall Log] {s}\n", .{str_ptr[0..len]});
+                if (comptime @import("builtin").os.tag != .freestanding) {
+                    std.debug.print("[Syscall Log] {s}\n", .{str_ptr[0..len]});
+                }
                 return .{ .code = 0, .data = 0 };
             },
         }

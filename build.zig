@@ -29,6 +29,7 @@ pub fn build(b: *std.Build) void {
                 .cpu_features_add = std.Target.riscv.featureSet(&.{.v}), // Enable RVV 1.0
             }),
             .optimize = optimize,
+            .code_model = .medany,
         }),
     });
     kernel_exe.root_module.addAssemblyFile(b.path("arch/riscv64/k1/boot.S"));
@@ -103,4 +104,26 @@ pub fn build(b: *std.Build) void {
     const run_tests = b.addRunArtifact(tests);
     const test_step = b.step("test", "Run all Clarigggz unit tests");
     test_step.dependOn(&run_tests.step);
+
+    // --- ISO Build Step (Unified BSD System Image Packaging) ---
+    const iso_step = b.step("iso", "Package Clarigggz OS into a bootable ISO image");
+    
+    const mkdir_cmd = b.addSystemCommand(&.{ "mkdir", "-p", "bin/iso_root/boot/grub" });
+    const cp_kernel = b.addSystemCommand(&.{ "cp", "bin/clarigggz-kernel", "bin/iso_root/boot/" });
+    cp_kernel.step.dependOn(&install_kernel.step);
+    cp_kernel.step.dependOn(&mkdir_cmd.step);
+
+    const grub_cfg_content = 
+        \\menuentry "Clarigggz OS (Agent Sovereign)" {
+        \\    multiboot /boot/clarigggz-kernel
+        \\    boot
+        \\}
+    ;
+    const write_grub = b.addSystemCommand(&.{ "sh", "-c", b.fmt("echo '{s}' > bin/iso_root/boot/grub/grub.cfg", .{grub_cfg_content}) });
+    write_grub.step.dependOn(&cp_kernel.step);
+
+    const mkrescue = b.addSystemCommand(&.{ "grub-mkrescue", "-o", "bin/clarigggz.iso", "bin/iso_root" });
+    mkrescue.step.dependOn(&write_grub.step);
+
+    iso_step.dependOn(&mkrescue.step);
 }

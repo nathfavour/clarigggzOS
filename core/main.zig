@@ -4,6 +4,9 @@ const Message = protocols.ipc.Message;
 
 const builtin = @import("builtin");
 
+// Disable threaded IO dependencies for freestanding RISC-V targets
+pub const std_options_debug_threaded_io: ?*anyopaque = null;
+
 /// Microkernel state
 const CoreBroker = struct {
     // Basic scheduler and memory state for the K1 core.
