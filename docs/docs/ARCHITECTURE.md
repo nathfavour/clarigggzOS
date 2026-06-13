@@ -1,7 +1,7 @@
-# Clarigggz OS Architecture: The Hexagonal Microkernel
+# Clarigggz OS Architecture: The Agent Sovereign
 
 ## 1. Philosophical Foundation
-Clarigggz OS is a capability-based, hexagonal microkernel designed for the Spacemit K1 RISC-V architecture. It prioritizes zero-cost abstraction, deterministic performance, and strict hardware-software symbiosis.
+Clarigggz OS is a general-purpose, agent-native, capability-based operating system designed to treat autonomous AI agents, local models, M2M sync, and capability security as core system primitives. It prioritizes zero-cost abstraction, deterministic performance, and strict hardware-software symbiosis.
 
 ## 2. Hexagonal Microkernel Design
 The system follows a strict "Ports and Adapters" pattern at the kernel level:

@@ -1,7 +1,7 @@
 # Clarigggz OS: Sovereign Architecture Manual 🌌
-### A Hexagonal Capability-Based Microkernel for RISC-V 64 (Spacemit K1)
+### A General-Purpose Agent-Native Operating System
 
-Clarigggz OS is a sovereign, agent-native, capability-based microkernel written in Zig 0.16.0. It is built to bypass the legacy app-first paradigms of mainstream operating systems (Android, iOS, Linux) and target a future where spatial computing, local AI models, and capability security are built directly into the kernel primitives.
+Clarigggz OS is a sovereign, agent-native, capability-based operating system written in Zig 0.16.0. It is built to bypass the legacy app-first paradigms of mainstream operating systems (Android, iOS, Linux) and target a future where autonomous AI agents, local models, secure machine-to-machine (M2M) protocols, and capability security are built directly into the kernel primitives.
 
 ---
 
