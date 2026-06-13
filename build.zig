@@ -71,6 +71,11 @@ pub fn build(b: *std.Build) void {
         components_step.dependOn(&install_comp.step);
     }
 
+    const compositor_module = b.addModule("compositor", .{
+        .root_source_file = b.path("components/compositor/main.zig"),
+    });
+    compositor_module.addImport("protocols", protocols_module);
+
     // --- x86_64 Simulator ---
     const simulator_exe = b.addExecutable(.{
         .name = "clarigggz-simulator",
@@ -82,6 +87,8 @@ pub fn build(b: *std.Build) void {
     });
     simulator_exe.root_module.addImport("protocols", protocols_module);
     simulator_exe.root_module.addImport("core", core_module);
+    simulator_exe.root_module.addImport("compositor", compositor_module);
+
     
     const install_simulator = b.addInstallArtifact(simulator_exe, .{});
     const simulator_step = b.step("simulator", "Build the Clarigggz Simulator (x86_64)");

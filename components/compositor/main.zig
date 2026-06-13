@@ -3,6 +3,118 @@ const protocols = @import("protocols");
 const DisplayPort = protocols.display.DisplayPort;
 const Message = protocols.ipc.Message;
 
+/// Window structure for display environment
+pub const Window = struct {
+    title: []const u8,
+    content: []const u8,
+    x: u32,
+    y: u32,
+    width: u32,
+    height: u32,
+};
+
+/// DesktopEnvironment: The foundational manager for window and desktop layouts.
+pub const DesktopEnvironment = struct {
+    windows: [4]Window,
+    window_count: usize,
+    width: u32,
+    height: u32,
+
+    pub fn init() DesktopEnvironment {
+        return .{
+            .windows = [_]Window{
+                .{ .title = "Agent Workspace", .content = "auracrab-purple-48: status=connected", .x = 3, .y = 3, .width = 44, .height = 7 },
+                .{ .title = "System Monitor", .content = "CPU: 1.2% | RAM: 284/1024KB", .x = 50, .y = 3, .width = 27, .height = 5 },
+                .{ .title = "M2M IPC Log", .content = "Port 200: IRQ 7 claimed.", .x = 3, .y = 12, .width = 74, .height = 7 },
+                .{ .title = "", .content = "", .x = 0, .y = 0, .width = 0, .height = 0 },
+            },
+            .window_count = 3,
+            .width = 80,
+            .height = 24,
+        };
+    }
+
+    pub fn draw(self: *const DesktopEnvironment) void {
+        var buffer: [24][80]u8 = undefined;
+        
+        // 1. Fill background with desktop pattern (dots or spaces)
+        for (0..24) |y| {
+            for (0..80) |x| {
+                if (y == 0) {
+                    buffer[y][x] = '=';
+                } else if (y == 23) {
+                    buffer[y][x] = '=';
+                } else {
+                    buffer[y][x] = if ((x + y) % 4 == 0) '.' else ' ';
+                }
+            }
+        }
+
+        // 2. Draw active windows
+        for (0..self.window_count) |w_idx| {
+            const w = self.windows[w_idx];
+            // Border and Title
+            for (0..w.height) |dy| {
+                const py = w.y + dy;
+                if (py >= 24) continue;
+                for (0..w.width) |dx| {
+                    const px = w.x + dx;
+                    if (px >= 80) continue;
+
+                    if (dy == 0) {
+                        buffer[py][px] = '-';
+                    } else if (dy == w.height - 1) {
+                        buffer[py][px] = '-';
+                    } else if (dx == 0 or dx == w.width - 1) {
+                        buffer[py][px] = '|';
+                    } else {
+                        buffer[py][px] = ' ';
+                    }
+                }
+            }
+            // Title text: centered or left-aligned on the top border
+            if (w.title.len > 0) {
+                const title_y = w.y;
+                const title_start = w.x + 2;
+                for (0..w.title.len) |ti| {
+                    if (title_start + ti < w.x + w.width - 2 and title_start + ti < 80) {
+                        buffer[title_y][title_start + ti] = w.title[ti];
+                    }
+                }
+            }
+            // Content text
+            if (w.content.len > 0) {
+                const content_y = w.y + 2;
+                const content_start = w.x + 2;
+                for (0..w.content.len) |ci| {
+                    if (content_start + ci < w.x + w.width - 2 and content_start + ci < 80) {
+                        buffer[content_y][content_start + ci] = w.content[ci];
+                    }
+                }
+            }
+        }
+
+        // 3. Draw Taskbar at top (y = 0) and bottom (y = 23)
+        const title = " CLARIGGGZ OS DESKTOP ENVIRONMENT ";
+        const start_x = (80 - title.len) / 2;
+        for (0..title.len) |i| {
+            buffer[0][start_x + i] = title[i];
+        }
+
+        const taskbar = " [Start] [Agents] [Workspace] | Status: Active | Key: 998ce54b... ";
+        for (0..taskbar.len) |i| {
+            if (i + 2 < 78) {
+                buffer[23][2 + i] = taskbar[i];
+            }
+        }
+
+        // 4. Print the buffer
+        for (0..24) |y| {
+            std.debug.print("{s}\n", .{buffer[y][0..80]});
+        }
+    }
+};
+
 /// WaveguideCompositor: The primary spatial windowing and frame-buffer server.
 /// Runs as an isolated user-space adapter.
 pub fn main() !void {
@@ -16,8 +128,12 @@ pub fn main() !void {
     };
     _ = current_config;
 
+    const desktop = DesktopEnvironment.init();
+    desktop.draw();
+
     // 2. Main Event Loop
-    while (true) {
+    var loops: usize = 0;
+    while (loops < 5) : (loops += 1) {
         // Mocking VSync wait for initial implementation
         const event = DisplayPort.Event{ .vsync = .{ .timestamp_ns = 12345678 } };
         _ = event;

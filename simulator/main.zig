@@ -9,13 +9,33 @@ const ipc_transport = core.ipc_transport;
 
 const mmio = @import("mmio.zig");
 const irq_controller = @import("irq_controller.zig");
+const compositor = @import("compositor");
+
+
 
 pub fn main() !void {
     var gpa = std.heap.DebugAllocator(.{}){};
     defer _ = gpa.deinit();
     const allocator = gpa.allocator();
 
-    std.debug.print("\n--- Clarigggz OS Simulator (x86_64-linux) ---\n", .{});
+    // 1. Print centered boot banner
+    core.printString("\n");
+    core.printCentered("================================================================================", 80);
+    core.printCentered("______ _            _                             ____   _____", 80);
+    core.printCentered("/ ____/| |          (_)                           / __ \\ / ____|", 80);
+    core.printCentered("| |     | | __ _ _ __ _  __ _  __ _  __ _ ____    | |  | | (___  ", 80);
+    core.printCentered("| |     | |/ _` | '__| |/ _` |/ _` |/ _` |_  /    | |  | |\\___ \\ ", 80);
+    core.printCentered("| |____ | | (_| | |  | | (_| | (_| | (_| |/ /     | |__| |____) |", 80);
+    core.printCentered("\\_____/|_|\\__,_|_|  |_|\\__, |\\__, |\\__, /___|     \\____/|_____/ ", 80);
+    core.printCentered("                        __/ | __/ | __/ |                       ", 80);
+    core.printCentered("                       |___/ |___/ |___/                        ", 80);
+    core.printCentered("================================================================================", 80);
+    core.printCentered("The Agent-Native Sovereign OS | RISC-V 64 Hexagonal Microkernel", 80);
+    core.printCentered("Booting Kernel version 0.1.0 ... (Simulation Mode)", 80);
+    core.printString("\n");
+
+    std.debug.print("--- Clarigggz OS Simulator (x86_64-linux) ---\n", .{});
+
 
     // 1. Initialize Simulator Core Broker
     var router = ipc_transport.Router.init(allocator);
@@ -71,5 +91,10 @@ pub fn main() !void {
         std.debug.print("Tactile Adapter: Message received, protocol=0x{X}\n", .{delivered.protocol_id});
     }
 
-    std.debug.print("Simulation complete.\n", .{});
+    std.debug.print("\n--- Display Environment: Loading Desktop ---\n", .{});
+    const desktop = compositor.DesktopEnvironment.init();
+    desktop.draw();
+
+    std.debug.print("\nSimulation complete.\n", .{});
 }
+
