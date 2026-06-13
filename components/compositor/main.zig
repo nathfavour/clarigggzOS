@@ -180,6 +180,8 @@ pub fn blendLayersSoftware(top: []const u32, bottom: []const u32, output: []u32)
     }
 }
 
+const builtin = @import("builtin");
+
 /// RVV-Optimized Alpha Blending (using inline assembly or primitives)
 pub fn blendLayersRVV(top: []const u32, bottom: []const u32, output: []u32) void {
     _ = top; _ = bottom; _ = output;
@@ -189,7 +191,15 @@ pub fn blendLayersRVV(top: []const u32, bottom: []const u32, output: []u32) void
     // vle8.v v16, (a1) # Load bottom layer bytes
 }
 
-export fn _start() callconv(.c) noreturn {
+// Only export _start when building for freestanding targets (RISC-V user space)
+comptime {
+    if (builtin.os.tag == .freestanding) {
+        @export(&_start, .{ .name = "_start", .linkage = .strong });
+    }
+}
+
+fn _start() callconv(.c) noreturn {
     _ = main() catch {};
     while (true) {}
 }
+
