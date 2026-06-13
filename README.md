@@ -1,7 +1,7 @@
-# Clarigggz OS: The Spatial Sovereign 🌌
-### A Hexagonal Microkernel for the Spacemit K1 RISC-V Architecture
+# Clarigggz OS: The Agent Sovereign 🌌
+### A General-Purpose Agent-Native Operating System
 
-**Clarigggz OS** is not a distribution; it is a foundation. It is a radical rejection of the bloated, monolithic paradigms of legacy systems like Linux and Android. Built from absolute zero in **Zig**, Clarigggz OS is engineered for a future where spatial computing and immersive intelligence demand zero thermal throttling, absolute user agency, and strict hardware-software symbiosis.
+**Clarigggz OS** is a radical rejection of the bloated, app-first paradigms of legacy systems like Linux and Android. Built from absolute zero in **Zig**, Clarigggz OS is a general-purpose, agent-native operating system designed to treat autonomous AI agents, local models, secure machine-to-machine (M2M) sync, and capability-based security as core kernel primitives, not sandboxed user applications.
 
 ---
 
