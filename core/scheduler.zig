@@ -148,6 +148,13 @@ pub const Scheduler = struct {
         return null;
     }
 
+    pub fn getCurrentThread(self: *const Scheduler) ?*Thread {
+        for (self.threads.items) |t| {
+            if (t.state == .running) return t;
+        }
+        return null;
+    }
+
     /// Block a thread with a specific reason.
     pub fn blockThread(self: *Scheduler, thread_id: u32, reason: WaitReason, object_id: u64) void {
         for (self.threads.items) |t| {

@@ -24,11 +24,11 @@ pub const scheduler = @import("scheduler.zig");
 pub const security = @import("security.zig");
 pub const physical_intent = @import("physical_intent.zig");
 
-var kernel_heap: memory.KernelHeap = undefined;
-var ipc_router: ipc_transport.Router = undefined;
-var core_scheduler: scheduler.Scheduler = undefined;
-var security_manager: security.SecurityManager = undefined;
-var tap_verifier: physical_intent.PhysicalSequenceVerifier = undefined;
+pub var kernel_heap: memory.KernelHeap = undefined;
+pub var ipc_router: ipc_transport.Router = undefined;
+pub var core_scheduler: scheduler.Scheduler = undefined;
+pub var security_manager: security.SecurityManager = undefined;
+pub var tap_verifier: physical_intent.PhysicalSequenceVerifier = undefined;
 
 const syscall = @import("syscall.zig");
 
