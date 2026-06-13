@@ -141,6 +141,9 @@ test "IPC Router - Port Creation and Message Delivery" {
         .limit = 0,
     };
 
+    var sched = scheduler.Scheduler.init(allocator);
+    defer sched.deinit();
+
     // 4. Send a message
     const msg = protocols.ipc.Message{
         .sender_id = 1,
@@ -150,7 +153,7 @@ test "IPC Router - Port Creation and Message Delivery" {
         .payload = [_]u8{0} ** 128,
     };
 
-    try router.deliver(&clist, 0, msg);
+    try router.deliver(&clist, 0, msg, 1, &sched);
 
     // 5. Verify delivery
     const port = router.ports.get(port_id).?;

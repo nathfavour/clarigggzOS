@@ -25,6 +25,37 @@ pub const Capability = struct {
         pub const execute: u7 = 1 << 2;
         pub const grant: u7 = 1 << 3; // Right to pass this cap to another process
     };
+
+    /// Derive a child capability with equal or restricted rights and boundaries.
+    pub fn derive(self: Capability, child_rights: u7, sub_base: u64, sub_limit: u32) !Capability {
+        // Verify child rights are a strict subset of current rights
+        if ((child_rights & self.rights) != child_rights) return error.RightsViolation;
+
+        switch (self.cap_type) {
+            .none => return error.InvalidCap,
+            .memory, .device => {
+                if (sub_base < self.base or sub_base + sub_limit > self.base + self.limit) {
+                    return error.OutOfBounds;
+                }
+                return Capability{
+                    .cap_type = self.cap_type,
+                    .rights = child_rights,
+                    .object_id = self.object_id,
+                    .base = sub_base,
+                    .limit = sub_limit,
+                };
+            },
+            .ipc_endpoint, .irq => {
+                return Capability{
+                    .cap_type = self.cap_type,
+                    .rights = child_rights,
+                    .object_id = self.object_id,
+                    .base = self.base,
+                    .limit = self.limit,
+                };
+            },
+        }
+    }
 };
 
 /// A CList is a collection of capabilities owned by a specific thread or process.
@@ -53,4 +84,76 @@ pub const CList = struct {
         if (cap.cap_type == .none) return null;
         return cap;
     }
+
+    /// Grant a capability to another CList. Requires the 'grant' right.
+    pub fn grant(self: *CList, src_idx: usize, dest_clist: *CList, dest_idx: usize) !void {
+        const cap = self.get(src_idx) orelse return error.InvalidSourceCapability;
+        if ((cap.rights & Capability.Rights.grant) == 0) return error.NoGrantPermission;
+
+        if (dest_idx >= dest_clist.caps.len) return error.IndexOutOfBounds;
+        if (dest_clist.caps[dest_idx].cap_type != .none) return error.DestinationSlotBusy;
+
+        dest_clist.caps[dest_idx] = cap;
+    }
+
+    /// Revoke a capability from the CList.
+    pub fn revoke(self: *CList, index: usize) !void {
+        if (index >= self.caps.len) return error.IndexOutOfBounds;
+        self.caps[index] = Capability{
+            .cap_type = .none,
+            .rights = 0,
+            .object_id = 0,
+            .base = 0,
+            .limit = 0,
+        };
+    }
+
+    /// Validate that a capability exists, has the expected type, and meets required rights.
+    pub fn validate(self: *const CList, index: usize, expected_type: CapType, required_rights: u7) !Capability {
+        const cap = self.get(index) orelse return error.InvalidCapability;
+        if (cap.cap_type != expected_type) return error.WrongCapType;
+        if ((cap.rights & required_rights) != required_rights) return error.NoPermission;
+        return cap;
+    }
 };
+
+test "Capability System - Derivation, Grant, Validation, and Revocation" {
+    const allocator = std.testing.allocator;
+
+    var clist_a = try CList.init(allocator, 8, 1);
+    defer allocator.free(clist_a.caps);
+
+    var clist_b = try CList.init(allocator, 8, 2);
+    defer allocator.free(clist_b.caps);
+
+    // Setup memory capability in A
+    clist_a.caps[0] = .{
+        .cap_type = .memory,
+        .rights = Capability.Rights.read | Capability.Rights.write | Capability.Rights.grant,
+        .object_id = 0,
+        .base = 0x1000,
+        .limit = 0x1000,
+    };
+
+    // Derive a restricted capability
+    const derived = try clist_a.caps[0].derive(Capability.Rights.read, 0x1100, 0x100);
+    try std.testing.expectEqual(derived.cap_type, CapType.memory);
+    try std.testing.expectEqual(derived.rights, Capability.Rights.read);
+    try std.testing.expectEqual(derived.base, 0x1100);
+    try std.testing.expectEqual(derived.limit, 0x100);
+
+    // Fail derivation with excessive rights
+    try std.testing.expectError(error.RightsViolation, clist_a.caps[0].derive(Capability.Rights.execute, 0x1000, 0x100));
+
+    // Grant capability from A to B
+    try clist_a.grant(0, &clist_b, 0);
+    try std.testing.expectEqual(clist_b.caps[0].cap_type, CapType.memory);
+
+    // Validate capability in B
+    const validated = try clist_b.validate(0, .memory, Capability.Rights.read | Capability.Rights.write);
+    try std.testing.expectEqual(validated.base, 0x1000);
+
+    // Revoke capability
+    try clist_b.revoke(0);
+    try std.testing.expect(clist_b.get(0) == null);
+}

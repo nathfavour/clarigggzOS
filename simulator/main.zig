@@ -11,7 +11,7 @@ const mmio = @import("mmio.zig");
 const irq_controller = @import("irq_controller.zig");
 
 pub fn main() !void {
-    var gpa = std.GeneralPurposeAllocator(.{}){};
+    var gpa = std.heap.DebugAllocator(.{}){};
     defer _ = gpa.deinit();
     const allocator = gpa.allocator();
 

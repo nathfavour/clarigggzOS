@@ -24,3 +24,8 @@ pub fn main() !void {
         _ = biometric_result;
     }
 }
+
+export fn _start() callconv(.c) noreturn {
+    _ = main() catch {};
+    while (true) {}
+}
