@@ -1,7 +1,16 @@
-zig-out/
+.zig-cache/
 zig-cache/
+.zig-out/
+zig-out/
 bin/
 .DS_Store
 *.swp
 *.tmp
 .docs/
+*.o
+*.a
+*.so
+*.dylib
+*.dll
+*.exe
+*.iso
