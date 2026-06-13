@@ -62,9 +62,51 @@ export fn k_trap_handler(scause: u64, sepc: u64, stval: u64) void {
     _ = stval;
 }
 
+pub fn printString(str: []const u8) void {
+    if (comptime builtin.os.tag == .freestanding) {
+        // Write to QEMU virt UART / serial port at 0x10000000
+        const uart_ptr: *volatile u8 = @ptrFromInt(0x10000000);
+        for (str) |c| {
+            uart_ptr.* = c;
+        }
+    } else {
+        std.debug.print("{s}", .{str});
+    }
+}
+
+pub fn printCentered(str: []const u8, width: usize) void {
+    if (str.len >= width) {
+        printString(str);
+        printString("\n");
+        return;
+    }
+    const pad = (width - str.len) / 2;
+    var i: usize = 0;
+    while (i < pad) : (i += 1) {
+        printString(" ");
+    }
+    printString(str);
+    printString("\n");
+}
+
 /// The Zig Entry Point from arch/riscv64/k1/boot.S
 export fn kmain() noreturn {
-    // ... rest of init ...
+    // Print centered boot banner
+    printString("\n");
+    printCentered("================================================================================", 80);
+    printCentered("______ _            _                             ____   _____", 80);
+    printCentered("/ ____/| |          (_)                           / __ \\ / ____|", 80);
+    printCentered("| |     | | __ _ _ __ _  __ _  __ _  __ _ ____    | |  | | (___  ", 80);
+    printCentered("| |     | |/ _` | '__| |/ _` |/ _` |/ _` |_  /    | |  | |\\___ \\ ", 80);
+    printCentered("| |____ | | (_| | |  | | (_| | (_| | (_| |/ /     | |__| |____) |", 80);
+    printCentered("\\_____/|_|\\__,_|_|  |_|\\__, |\\__, |\\__, /___|     \\____/|_____/ ", 80);
+    printCentered("                        __/ | __/ | __/ |                       ", 80);
+    printCentered("                       |___/ |___/ |___/                        ", 80);
+    printCentered("================================================================================", 80);
+    printCentered("The Agent-Native Sovereign OS | RISC-V 64 Hexagonal Microkernel", 80);
+    printCentered("Booting Kernel version 0.1.0 ...", 80);
+    printString("\n");
+
     // 1. Initialize Kernel Heap (1MB for early boot)
     kernel_heap = memory.KernelHeap.init(0x80100000, 1024);
     const allocator = kernel_heap.allocator();
