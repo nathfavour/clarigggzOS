@@ -2,12 +2,29 @@ const std = @import("std");
 
 pub fn build(b: *std.Build) void {
     // --- Target Configuration ---
-    const target = b.standardTargetOptions(.{});
+    const target = b.standardTargetOptions(.{
+        .default_target = .{
+            .cpu_arch = .riscv64,
+            .os_tag = .freestanding,
+            .cpu_model = .{ .explicit = &std.Target.riscv.cpu.generic_rv64 },
+            .cpu_features_add = std.Target.riscv.featureSet(&.{.v}), // Enable RVV 1.0 (vector extensions)
+        },
+    });
     const optimize = b.standardOptimizeOption(.{});
     const target_info = target.result;
 
     // Set the install prefix to 'bin/' as mandated by AGENTS.md
     b.install_path = "bin";
+
+    // --- Hardware Platform Selection ---
+    const hw_target = b.option(
+        []const u8,
+        "hardware",
+        "Target hardware platform (qemu_virt or spacemit_k1)",
+    ) orelse "qemu_virt";
+
+    const options = b.addOptions();
+    options.addOption([]const u8, "hardware", hw_target);
 
     // --- Modules ---
     const protocols_module = b.addModule("protocols", .{
@@ -18,6 +35,7 @@ pub fn build(b: *std.Build) void {
         .root_source_file = b.path("core/main.zig"),
     });
     core_module.addImport("protocols", protocols_module);
+    core_module.addOptions("config", options);
 
     // --- Clarigggz Microkernel ---
     const kernel_exe = b.addExecutable(.{
@@ -28,7 +46,7 @@ pub fn build(b: *std.Build) void {
             .optimize = optimize,
         }),
     });
-
+    kernel_exe.root_module.addOptions("config", options);
 
     // Dynamically apply architecture-specific boot code and linker scripts
     switch (target_info.cpu.arch) {
@@ -51,10 +69,24 @@ pub fn build(b: *std.Build) void {
     kernel_exe.root_module.addImport("protocols", protocols_module);
     kernel_exe.lto = .none;
 
-
     const install_kernel = b.addInstallArtifact(kernel_exe, .{});
     const kernel_step = b.step("kernel", "Build the Clarigggz Microkernel");
     kernel_step.dependOn(&install_kernel.step);
+
+    // Raw binary extraction for QEMU / bare-metal deployment
+    const kernel_path = b.getInstallPath(.bin, "clarigggz-kernel");
+    const bin_out_path = b.getInstallPath(.bin, "clarigggz.bin");
+    const objcopy = b.addSystemCommand(&.{
+        "llvm-objcopy",
+        "-O",
+        "binary",
+        kernel_path,
+        bin_out_path,
+    });
+    objcopy.step.dependOn(&install_kernel.step);
+    const bin_step = b.step("bin", "Generate raw binary clarigggz.bin for QEMU");
+    bin_step.dependOn(&objcopy.step);
+
 
     // --- Components (User-Space Adapters) ---
     const component_targets = [_]struct { name: []const u8, path: []const u8 }{
