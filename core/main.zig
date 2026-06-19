@@ -95,6 +95,7 @@ pub const ipc_transport = @import("ipc_transport.zig");
 pub const scheduler = @import("scheduler.zig");
 pub const security = @import("security.zig");
 pub const physical_intent = @import("physical_intent.zig");
+pub const paging = @import("paging.zig");
 
 pub var kernel_heap: memory.KernelHeap = undefined;
 pub var ipc_router: ipc_transport.Router = undefined;
@@ -171,11 +172,48 @@ export fn kmain() noreturn {
     kernel_heap = memory.KernelHeap.init(0x80100000, 1024);
     const allocator = kernel_heap.allocator();
 
+    // Initialize Paging (SV39)
+    printString("[Boot] Initializing Sv39 Virtual Memory Page Tables...\n");
+    var kernel_aspace = paging.AddressSpace.init(allocator) catch {
+        printString("[Panic] Failed to initialize kernel page table!\n");
+        while (true) {}
+    };
+
+    // Identity map kernel memory: 0x80000000 up to 0x80400000 (4MB)
+    var page_addr: u64 = 0x80000000;
+    while (page_addr < 0x80400000) : (page_addr += 4096) {
+        kernel_aspace.map(page_addr, page_addr, paging.PTE.Flags.valid | paging.PTE.Flags.read | paging.PTE.Flags.write | paging.PTE.Flags.exec) catch {
+            printString("[Panic] Failed to map kernel code region!\n");
+            while (true) {}
+        };
+    }
+
+    // Map physical MMIO UART base
+    printString("[Boot] Mapping MMIO Hardware Address space...\n");
+    kernel_aspace.map(uart_base, uart_base, paging.PTE.Flags.valid | paging.PTE.Flags.read | paging.PTE.Flags.write) catch {
+        printString("[Panic] Failed to map UART MMIO region!\n");
+        while (true) {}
+    };
+
+    // Enable paging: load satp and flush TLB
+    if (comptime builtin.cpu.arch == .riscv64 and builtin.os.tag == .freestanding) {
+        printString("[Boot] Enabling virtual address translation (satp)...\n");
+        const satp_val = kernel_aspace.satp();
+        asm volatile (
+            \\csrw satp, %[satp]
+            \\sfence.vma
+            :
+            : [satp] "r" (satp_val)
+        );
+    }
+    printString("[Boot] Virtual memory paging successfully activated!\n");
+
     // 2. Initialize the IPC Router
     ipc_router = ipc_transport.Router.init(allocator);
 
     // 3. Initialize the Scheduler
     core_scheduler = scheduler.Scheduler.init(allocator);
+
 
     // 4. Initialize Security Subsystems
     security_manager = security.SecurityManager{};
