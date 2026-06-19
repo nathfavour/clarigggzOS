@@ -156,14 +156,15 @@ pub fn build(b: *std.Build) void {
     // --- ISO Build Step (Unified BSD System Image Packaging) ---
     const iso_step = b.step("iso", "Package Clarigggz OS into a bootable ISO image");
     
-    const kernel_path = b.getInstallPath(.bin, "clarigggz-kernel");
+    const iso_kernel_path = b.getInstallPath(.bin, "clarigggz-kernel");
     const iso_root_path = b.getInstallPath(.prefix, "iso_root");
     const boot_dir_path = b.getInstallPath(.prefix, "iso_root/boot");
     const grub_dir_path = b.getInstallPath(.prefix, "iso_root/boot/grub");
     const iso_out_path = b.getInstallPath(.prefix, "clarigggz.iso");
 
     const mkdir_cmd = b.addSystemCommand(&.{ "mkdir", "-p", grub_dir_path });
-    const cp_kernel = b.addSystemCommand(&.{ "cp", kernel_path, boot_dir_path });
+    const cp_kernel = b.addSystemCommand(&.{ "cp", iso_kernel_path, boot_dir_path });
+
     cp_kernel.step.dependOn(&install_kernel.step);
     cp_kernel.step.dependOn(&mkdir_cmd.step);
 
