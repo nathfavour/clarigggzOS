@@ -117,12 +117,14 @@ pub fn build(b: *std.Build) void {
     });
     compositor_module.addImport("protocols", protocols_module);
 
+    const host_target = b.resolveTargetQuery(.{});
+
     // --- x86_64 Simulator ---
     const simulator_exe = b.addExecutable(.{
         .name = "clarigggz-simulator",
         .root_module = b.createModule(.{
             .root_source_file = b.path("simulator/main.zig"),
-            .target = target,
+            .target = host_target,
             .optimize = optimize,
         }),
     });
@@ -143,7 +145,8 @@ pub fn build(b: *std.Build) void {
     const tests = b.addTest(.{
         .root_module = b.createModule(.{
             .root_source_file = b.path("core/main.zig"),
-            .target = target,
+            .target = host_target,
+
             .optimize = optimize,
         }),
     });
