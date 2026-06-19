@@ -1,57 +1,66 @@
-# Clarigggz OS: The Agent Sovereign 🌌
-### A General-Purpose Agent-Native Operating System
+# Clarigggz OS: The Spatial Sovereign 🌌
+### A Bare-Metal, Agent-Native Operating System for Smart Glasses
 
-**Clarigggz OS** is a radical rejection of the bloated, app-first paradigms of legacy systems like Linux and Android. Built from absolute zero in **Zig**, Clarigggz OS is a general-purpose, agent-native operating system designed to treat autonomous AI agents, local models, secure machine-to-machine (M2M) sync, and capability-based security as core kernel primitives, not sandboxed user applications.
-
----
-
-## 🏛 The Engineering Constitution
-This project is governed by five immutable articles:
-1.  **The Prime Directive**: Zero-cost abstraction and extreme performance via Zig.
-2.  **Hexagonal Microkernel**: Strict separation of Core Broker (Kernel) and Adapters (Drivers/Servers).
-3.  **Intelligence Pareto (80/20)**: 80% of AI (NLP, Vision, Wake-word) happens strictly offline via RISC-V Vector (RVV 1.0) intrinsics.
-4.  **Intent-to-Unlock**: A revolutionary security model where the user owns the hardware, bypassing safety invariants only through physical biometric consensus.
-5.  **Monorepo Integrity**: Atomic upgrades across Kernel, Protocols, and the first-class x86_64 Simulator.
+**Clarigggz OS** is a hyper-lean, bare-metal, context-aware, agentic-first operating system designed specifically for low-latency smart glasses (70-gram face-worn form factors). Built entirely in **Zig**, it implements an Asymmetric Multiprocessing (AMP) microkernel architecture optimizing physical resource limits of the **SpacemiT K1 (RISC-V 64 / RVA22)** SoC.
 
 ---
 
-## ⚡ Technical Core
-*   **Target Hardware**: Spacemit K1 (RISC-V 64-bit).
-*   **Vector Mastery**: All tensor and matrix operations target **RVV 1.0** directly. No scalar fallbacks.
-*   **Power Budget**: Strict **Wait For Interrupt (WFI)** discipline. Polling is forbidden.
-*   **Memory Safety**: Capability-based addressing (C-lists). No hidden allocations. No garbage collection.
+## 🏛 Core Architectural Principles
+
+1.  **Asymmetric Multiprocessing (AMP):**
+    *   **High-Speed Monolithic Pipeline:** privileged kernel space execution cluster for display composition, camera frame-capture, and matrix calculations utilizing 256-bit RISC-V Vector Extensions (RVV 1.0).
+    *   **Isolated Agent Workspace:** non-privileged, isolated microkernel-style execution spaces running high-level cooperative agent logic. A crash in the agent workspace cannot disrupt camera or display tracking loops.
+2.  **Zero-Allocation Runtime:** Zero hidden allocations or global state. Dynamic memory demands must explicitly ingest fixed-buffer or page allocators.
+3.  **Strict Power & Thermal Discipline:** Avoid polling loops; utilize CPU-level `WFI` (Wait For Interrupt) to save battery and reduce thermal output on face-worn devices.
+4.  **Capability-Based Security:** Fine-grained access control lists (C-lists) governing memory regions, physical intent consensus, and inter-process communication.
 
 ---
 
-## 🗺 The Future: A New Frontier
-Clarigggz OS is evolving toward a post-smartphone world:
--   **Phase 1: The Core Broker**: Bare-metal K1 boot, RVV initialization, and capability-based IPC.
--   **Phase 2: Immersive Intelligence**: Integrating `Llama.rs` for local, bare-metal LLM inference optimized for RISC-V vectors.
--   **Phase 3: Waveguide Compositor**: A zero-latency spatial windowing system for AR/VR hardware.
--   **Phase 4: Sovereign Security**: Implementing the "Liability Shift" protocol—total hardware control for the user, with verifiable relocking paths.
+## 🛠 Emulation and Bare-Metal Execution
 
----
-
-## 🛠 For the Engineers
+Clarigggz OS supports testing kernel systems via QEMU side-by-side with target SpacemiT hardware.
 
 ### Prerequisites
-- **Zig (0.16.0)**: The only tool you need to build the world.
 
-### The Simulator (x86_64)
-Rapidly iterate on protocol logic without flashing hardware. The simulator is a first-class citizen.
-```bash
-zig build simulate
-```
+*   **Zig Toolchain (0.16.0 / 0.17.0-dev)**
+*   **QEMU (riscv64)**
+*   **llvm-objcopy** (included with standard compiler toolchains)
 
-### The Hardware (RISC-V K1)
-Compile the sovereign kernel for the target K1 silicon.
+### Build Options
+
+By default, compiling the kernel targets `riscv64-freestanding` using the `.medany` code model.
+
+*   **Generate raw binary `clarigggz.bin` for QEMU virt:**
+    ```bash
+    zig build bin -Dhardware=qemu_virt
+    ```
+*   **Generate raw binary `clarigggz.bin` for SpacemiT K1:**
+    ```bash
+    zig build bin -Dhardware=spacemit_k1
+    ```
+
+### Running on QEMU
+
+Run the compiled kernel inside QEMU's RISC-V Virt Sandbox:
+
 ```bash
-zig build -Dtarget=riscv64-freestanding
+qemu-system-riscv64 \
+    -M virt \
+    -cpu rv64 \
+    -smp 8 \
+    -m 2G \
+    -bios default \
+    -kernel zig-out/bin/clarigggz.bin \
+    -nographic \
+    -serial mon:stdio
 ```
 
 ---
 
-## 🤝 Join the Foundation
-Clarigggz OS is for those who believe that the user is the ultimate authority over their silicon. We are building a system that is as elegant as it is powerful, as secure as it is free.
+## 🏛 Subsystems Roadmap
 
-**The future is RISC-V. The future is Clarigggz.**
+*   [x] **Buddy Allocator & Virtual Paging:** Sv39 3-level page table setup.
+*   [x] **Hardware Register Map:** Zero-cost compile-time MMIO hardware mappings.
+*   [x] **16550A UART Driver:** Low-level console logger mapped to virt/physical interfaces.
+*   [x] **Priority Scheduler & IPC Router:** Thread context switcher and capability-bound messaging.
+*   [x] **Simulator Digital Twin:** Local x86 simulator for protocol testing (`zig build simulate`).
