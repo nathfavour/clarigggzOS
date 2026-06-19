@@ -1,15 +1,84 @@
 const std = @import("std");
 const protocols = @import("protocols");
 const Message = protocols.ipc.Message;
+const config = @import("config");
 
 const builtin = @import("builtin");
 
 // Disable threaded IO dependencies for freestanding RISC-V targets
 pub const std_options_debug_threaded_io: ?*anyopaque = null;
 
+/// Hardware mapping pattern via Comptime
+pub fn HardwareRegisterMap(comptime base_addr: usize) type {
+    return packed struct {
+        control_bits: u4,
+        interrupt_mask: u1,
+        frequency_divider: u3,
+        reserved: u24,
+
+        const Self = @This();
+        pub inline fn get() *volatile Self {
+            return @ptrFromInt(base_addr);
+        }
+    };
+}
+
+/// Generic 16550A UART Driver
+pub fn Uart16550(comptime base_addr: usize) type {
+    return struct {
+        pub const THR: *volatile u8 = @ptrFromInt(base_addr + 0);
+        pub const IER: *volatile u8 = @ptrFromInt(base_addr + 1);
+        pub const FCR: *volatile u8 = @ptrFromInt(base_addr + 2);
+        pub const LCR: *volatile u8 = @ptrFromInt(base_addr + 3);
+        pub const LSR: *volatile u8 = @ptrFromInt(base_addr + 5);
+
+        pub fn init() void {
+            IER.* = 0x00; // Disable all interrupts
+            LCR.* = 0x80; // Enable DLAB (divisor latch access bit)
+            
+            // Set divisor latch for baud rate 115200 (divisor = 3)
+            const dll: *volatile u8 = @ptrFromInt(base_addr + 0);
+            const dlm: *volatile u8 = @ptrFromInt(base_addr + 1);
+            dll.* = 0x03;
+            dlm.* = 0x00;
+
+            LCR.* = 0x03; // 8 bits, no parity, one stop bit (DLAB disabled)
+            FCR.* = 0xC7; // Enable FIFO, clear RX/TX FIFO, 14-byte threshold
+        }
+
+        pub fn putc(c: u8) void {
+            // Wait for Transmitter Holding Register Empty (bit 5 of LSR)
+            while ((LSR.* & 0x20) == 0) {}
+            THR.* = c;
+        }
+
+        pub fn puts(str: []const u8) void {
+            for (str) |c| {
+                putc(c);
+            }
+        }
+    };
+}
+
+pub const TargetHardware = enum {
+    qemu_virt,
+    spacemit_k1,
+};
+
+pub const current_hardware: TargetHardware = if (std.mem.eql(u8, config.hardware, "spacemit_k1"))
+    .spacemit_k1
+else
+    .qemu_virt;
+
+pub const uart_base = switch (current_hardware) {
+    .qemu_virt => 0x10000000,
+    .spacemit_k1 => 0xD8000000, // SpacemiT K1 UART0 base
+};
+
+pub const system_uart = Uart16550(uart_base);
+
 /// Microkernel state
 const CoreBroker = struct {
-    // Basic scheduler and memory state for the K1 core.
     capabilities: std.ArrayList(u64), // Placeholder for actual C-list management.
     
     pub fn init(allocator: std.mem.Allocator) CoreBroker {
@@ -45,17 +114,9 @@ export fn k_trap_handler(scause: u64, sepc: u64, stval: u64) void {
     } else {
         // Handle Synchronous Traps (Syscalls, Faults)
         if (code == 8 or code == 9) { // Environment Call (User or Supervisor)
-            // Syscall logic here
-            // We would read registers a7 (syscall num), a0, a1, a2 (args)
-            // from the thread's saved context.
-            
-            // For now, mock a call to the dispatcher
             _ = syscall.Dispatcher.handle(0, 0, 0, 0);
-            
-            // Increment sepc to point to the instruction after ecall
-            _ = sepc; // In a real system, we'd update thread.context.mepc
+            _ = sepc;
         } else {
-            // Memory Fault or Illegal Instruction
             while (true) {} // Kernel Panic
         }
     }
@@ -64,11 +125,7 @@ export fn k_trap_handler(scause: u64, sepc: u64, stval: u64) void {
 
 pub fn printString(str: []const u8) void {
     if (comptime builtin.os.tag == .freestanding) {
-        // Write to QEMU virt UART / serial port at 0x10000000
-        const uart_ptr: *volatile u8 = @ptrFromInt(0x10000000);
-        for (str) |c| {
-            uart_ptr.* = c;
-        }
+        system_uart.puts(str);
     } else {
         std.debug.print("{s}", .{str});
     }
@@ -91,6 +148,9 @@ pub fn printCentered(str: []const u8, width: usize) void {
 
 /// The Zig Entry Point from arch/riscv64/k1/boot.S
 export fn kmain() noreturn {
+    if (comptime builtin.os.tag == .freestanding) {
+        system_uart.init();
+    }
     // Print centered boot banner
     printString("\n");
     printCentered("================================================================================", 80);
