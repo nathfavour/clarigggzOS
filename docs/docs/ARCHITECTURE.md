@@ -1,7 +1,10 @@
-# Clarigggz OS Architecture: The Agent Sovereign
+# Clarigggz OS Architecture
 
 ## 1. Philosophical Foundation
-Clarigggz OS is a general-purpose, agent-native, capability-based operating system designed to treat autonomous AI agents, local models, M2M sync, and capability security as core system primitives. It prioritizes zero-cost abstraction, deterministic performance, and strict hardware-software symbiosis.
+
+Clarigggz OS is the **universal realtime, efficient agentic operating system** for the post-smartphone world — smart glasses, wearables, and spatial devices. It is agent-native and capability-based: autonomous agents, local models, M2M sync, and capability security are core system primitives, not userland afterthoughts. It prioritizes zero-cost abstraction, deterministic performance, and strict hardware-software symbiosis.
+
+For subsystem-level detail, see the root [`ARCHITECTURE.md`](../../ARCHITECTURE.md).
 
 ## 2. Hexagonal Microkernel Design
 The system follows a strict "Ports and Adapters" pattern at the kernel level:

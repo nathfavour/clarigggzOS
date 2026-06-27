@@ -151,6 +151,7 @@ pub fn build(b: *std.Build) void {
         }),
     });
     tests.root_module.addImport("protocols", protocols_module);
+    tests.root_module.addOptions("config", options);
 
     const run_tests = b.addRunArtifact(tests);
     const test_step = b.step("test", "Run all Clarigggz unit tests");

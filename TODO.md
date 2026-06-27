@@ -1,32 +1,36 @@
 # Clarigggz OS Implementation Roadmap
 
+Status key: `[x]` done · `[~]` partial · `[ ]` not started
+
 ## Phase 1: Bare-Metal Foundation (RISC-V K1)
-- [ ] **K1 Bootloader Integration**: Implement `arch/riscv64/k1/boot.S` to handle early HART initialization.
-- [ ] **WFI Control**: Implement the "Prime Directive" power management (Wait For Interrupt) in the idle loop.
-- [ ] **Vector Extension (RVV 1.0) Initialization**: Enable V-extension in `mstatus` and verify vector length (VLEN).
-- [ ] **Page Table Management**: Implement SV39 or SV48 paging for isolated user-space "Adapters".
+- [x] **K1 Bootloader Integration**: `arch/riscv64/k1/boot.S`, `trap.S`, `switch.S`
+- [x] **WFI Control**: Idle loop uses `wfi` (RISC-V) / `hlt` (x86_64)
+- [ ] **Vector Extension (RVV 1.0) Initialization**: Enable V-extension in `mstatus` and verify VLEN at boot
+- [x] **Page Table Management**: SV39 paging with identity map and MMIO mapping in `kmain`
 
 ## Phase 2: Hexagonal Microkernel (The Core Broker)
-- [ ] **Capability System**: Implement C-lists for granular resource access (Memory, IRQs, IPC).
-- [ ] **IPC Transport**: High-performance, zero-copy message passing between Adapters.
-- [ ] **Scheduler**: RVV-aware context switching (saving/restoring vector registers only when necessary).
-- [ ] **Interrupt Routing**: Core Broker to Adapter event delivery.
+- [x] **Capability System**: C-lists with derive, grant, and revoke
+- [x] **IPC Transport**: Sync message passing with port queues and blocking send/recv
+- [~] **Scheduler**: Priority queues and RVV-aware context struct; assembly context switch TODO
+- [~] **Interrupt Routing**: Trap handler scaffold; PLIC/CLINT delivery to adapters in progress
 
 ## Phase 3: Ports & Protocols
-- [ ] **DisplayPort**: Define the waveguide compositor interface.
-- [ ] **InputPort**: Define the "Tactile ID" and spatial event structures.
-- [ ] **NeuralPort**: Define the RVV-optimized tensor offloading protocol.
+- [x] **DisplayPort**: Framebuffer layout and VSync event types
+- [x] **InputPort**: Tactile and spatial event structures
+- [x] **NeuralPort**: RVV-oriented tensor request protocol
 
 ## Phase 4: Adapters (User-Space Servers)
-- [ ] **Waveguide Compositor**: Initial framebuffer server.
-- [ ] **Tactile ID Server**: Biometric verification process.
-- [ ] **Llama.rs Integration**: Offline NLP parsing using RVV 1.0 intrinsics.
+- [~] **Waveguide Compositor**: Desktop demo and software alpha blend; RVV blend and HW path TODO
+- [~] **Tactile ID Server**: Adapter scaffold; IPC integration TODO
+- [ ] **Agent Runtime**: Load adapters as isolated address spaces from kernel
+- [ ] **Llama.rs Integration**: Offline NLP parsing using RVV 1.0 intrinsics
 
 ## Phase 5: Security & "Intent-to-Unlock"
-- [ ] **TrustZone Implementation**: Software-defined secure enclave for biometric data.
-- [ ] **Physical Sequence Verifier**: Logic for "Physical Intent" (e.g., specific tap sequences).
-- [ ] **Liability Logger**: Write-only state transitions for "Unlocked" status.
+- [ ] **TrustZone Implementation**: Software-defined secure enclave for biometric data
+- [~] **Physical Sequence Verifier**: Tap-sequence logic in `core/physical_intent.zig`
+- [ ] **Liability Logger**: Write-only state transitions for "Unlocked" status
 
 ## Phase 6: Simulator Parity (x86_64)
-- [ ] **K1 Peripheral Mocks**: Mock IRQ controller and UART for the simulator.
-- [ ] **RVV Emulation Support**: Integration with `qemu-riscv64` or native RVV-to-AVX512 mapping for simulation.
+- [x] **K1 Peripheral Mocks**: MMIO and IRQ controller mocks in `simulator/`
+- [~] **End-to-End Protocol Loop**: IRQ → IPC → adapter demo in `zig build simulate`
+- [ ] **RVV Emulation Support**: QEMU RVV or host-side vector mapping for neural adapter tests
