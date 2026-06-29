@@ -48,7 +48,7 @@ pub const LoadedElf = struct {
 pub const ElfLoader = struct {
   pub fn validateHeader(elf: []const u8) !*const Elf64Ehdr {
         if (elf.len < @sizeOf(Elf64Ehdr)) return error.TruncatedElf;
-        const hdr = @as(*const Elf64Ehdr, @ptrCast(elf.ptr));
+        const hdr = @as(*const Elf64Ehdr, @ptrCast(@alignCast(elf.ptr)));
         if (hdr.ident[0] != 0x7f or hdr.ident[1] != 'E' or hdr.ident[2] != 'L' or hdr.ident[3] != 'F') {
             return error.BadMagic;
         }

@@ -14,3 +14,4 @@ bin/
 *.dll
 *.exe
 *.iso
+core/blobs/*.elf
