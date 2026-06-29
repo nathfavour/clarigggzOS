@@ -62,7 +62,7 @@ pub const Thread = struct {
             .parent_clist = parent_clist,
             .ctx = .{
                 .ra = entry,
-                .sp = stack_top,
+                .sp = stack_top - 16,
             },
         };
     }
@@ -105,37 +105,18 @@ pub const Scheduler = struct {
     pub fn schedule(self: *Scheduler) ?*Thread {
         if (self.thread_count == 0) return null;
 
-        var selected_thread: ?*Thread = null;
-        var best_prio: u8 = 255;
-        var best_idx: ?usize = null;
-
         const count = self.thread_count;
         const start_idx = self.current_idx;
         var i: usize = 0;
         while (i < count) : (i += 1) {
-            const idx = (start_idx + 1 + i) % count;
-            if (self.threads[idx]) |t| {
-                if (t.state == .ready or t.state == .running) {
-                    if (t.priority < best_prio) {
-                        best_prio = t.priority;
-                        selected_thread = t;
-                        best_idx = idx;
-                    }
-                }
-            }
-        }
-
-        if (selected_thread) |t| {
-            if (best_idx) |idx| self.current_idx = idx;
-            for (self.threads[0..self.thread_count]) |maybe_other| {
-                if (maybe_other) |other| {
-                    if (other.id != t.id and other.state == .running) {
-                        other.state = .ready;
-                    }
-                }
-            }
-            t.state = .running;
-            return t;
+            var idx = start_idx + 1 + i;
+            if (idx >= count) idx -= count;
+            const slot_ptr: *volatile ?*Thread = &self.threads[idx];
+            const slot = slot_ptr.* orelse continue;
+            if (slot.state != .ready) continue;
+            self.current_idx = idx;
+            slot.state = .running;
+            return slot;
         }
         return null;
     }

@@ -80,30 +80,8 @@ pub const DesktopEnvironment = struct {
 fn adapterMain() void {
     runtime.log("compositor: waveguide adapter online");
 
-    const fb_base: u64 = 0x81000000;
-    if (comptime @import("builtin").os.tag == .freestanding) {
-        const px: [*]u32 = @ptrFromInt(fb_base);
-        const w: u32 = 640;
-        // Boot splash only — full compositor pass runs once adapters are isolated.
-        var y: u32 = 0;
-        while (y < 64) : (y += 1) {
-            var x: u32 = 0;
-            while (x < 64) : (x += 1) {
-                px[@as(usize, y) * w + x] = 0xC022D3EE;
-            }
-        }
-    } else {
-        const desktop = DesktopEnvironment.init();
-        desktop.draw();
-    }
-
     var loops: usize = 0;
     while (loops < 100) : (loops += 1) {
-        _ = DisplayPort.Event{ .vsync = .{ .timestamp_ns = @intCast(loops * 16666666) } };
-        var layer1 = [_]u32{0xFF0000FF} ** 16;
-        var layer2 = [_]u32{0x00FF007F} ** 16;
-        var output = [_]u32{0} ** 16;
-        blendLayersSoftware(&layer1, &layer2, &output);
         runtime.yield();
     }
 }

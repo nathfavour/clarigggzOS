@@ -1,8 +1,10 @@
 const std = @import("std");
 const builtin = @import("builtin");
 
-/// Resolved at link time: kernel provides cooperative switch; standalone ELFs provide ecall stub.
+/// Resolved at link time: kernel provides cooperative switch; standalone ELFs provide ecall stubs.
 extern fn clarigggz_thread_yield() void;
+extern fn clarigggz_adapter_log(ptr: [*]const u8, len: usize) void;
+extern fn clarigggz_submit_intent(tap_id: u16, timestamp: u64, biometric: bool) void;
 
 /// User-space syscall stubs for adapter processes.
 pub const Syscall = enum(u64) {
@@ -22,34 +24,14 @@ pub fn yield() void {
 
 pub fn submitIntent(tap_id: u16, timestamp: u64, biometric: bool) void {
     if (comptime builtin.cpu.arch == .riscv64 and builtin.os.tag == .freestanding) {
-        asm volatile (
-            \\li a0, 5
-            \\mv a1, %[tap]
-            \\mv a2, %[ts]
-            \\mv a3, %[bio]
-            \\ecall
-            :
-            : [tap] "r" (@as(u64, tap_id)),
-              [ts] "r" (timestamp),
-              [bio] "r" (@as(u64, if (biometric) 1 else 0))
-            : .{ .memory = true }
-        );
+        clarigggz_submit_intent(tap_id, timestamp, biometric);
     }
     _ = .{ tap_id, timestamp, biometric };
 }
 
 pub fn log(msg: []const u8) void {
     if (comptime builtin.cpu.arch == .riscv64 and builtin.os.tag == .freestanding) {
-        asm volatile (
-            \\li a0, 255
-            \\mv a1, %[ptr]
-            \\mv a2, %[len]
-            \\ecall
-            :
-            : [ptr] "r" (@intFromPtr(msg.ptr)),
-              [len] "r" (msg.len)
-            : .{ .memory = true }
-        );
+        clarigggz_adapter_log(msg.ptr, msg.len);
     } else if (builtin.os.tag != .freestanding) {
         std.debug.print("[adapter] {s}\n", .{msg});
     }

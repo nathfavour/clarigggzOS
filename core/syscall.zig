@@ -28,6 +28,33 @@ fn rescheduleFrom(current: *main.scheduler.Thread) void {
 pub const Dispatcher = struct {
     pub fn handle(call_num: u64, a1: u64, a2: u64, a3: u64) Result {
         const syscall_id = std.enums.fromInt(Syscall, call_num) orelse return .{ .code = 1, .data = 0 };
+
+        switch (syscall_id) {
+            .log => {
+                const str_ptr = @as([*]const u8, @ptrFromInt(a1));
+                const len_raw: usize = @intCast(a2);
+                const len = @min(len_raw, 256);
+                main.printString("[adapter] ");
+                main.printString(str_ptr[0..len]);
+                main.printString("\n");
+                return .{ .code = 0, .data = 0 };
+            },
+            .submit_intent => {
+                const tap_id: u16 = @intCast(a1);
+                const timestamp: u64 = a2;
+                const biometric = a3 != 0;
+                main.handlePhysicalIntent(tap_id, timestamp, biometric);
+                return .{ .code = 0, .data = @intFromEnum(main.security_manager.state) };
+            },
+            .yield => {
+                if (main.current_thread) |t| {
+                    t.state = .ready;
+                }
+                return .{ .code = 0, .data = 0 };
+            },
+            else => {},
+        }
+
         const current_thread = main.current_thread orelse main.core_scheduler.getCurrentThread() orelse return .{ .code = 3, .data = 0 };
 
         switch (syscall_id) {
@@ -56,23 +83,10 @@ pub const Dispatcher = struct {
                 msg_out.* = msg;
                 return .{ .code = 0, .data = 0 };
             },
-            .yield => {
-                // Yield must switch outside the trap handler; kernel adapters use
-                // clarigggz_thread_yield() instead of this ecall path.
-                current_thread.state = .ready;
-                return .{ .code = 0, .data = 0 };
-            },
             .get_cap => {
                 const cap_index: usize = @intCast(a1);
                 const cap = current_thread.clist.get(cap_index) orelse return .{ .code = 1, .data = 0 };
                 return .{ .code = 0, .data = @intFromEnum(cap.cap_type) };
-            },
-            .submit_intent => {
-                const tap_id: u16 = @intCast(a1);
-                const timestamp: u64 = a2;
-                const biometric = a3 != 0;
-                main.handlePhysicalIntent(tap_id, timestamp, biometric);
-                return .{ .code = 0, .data = @intFromEnum(main.security_manager.state) };
             },
             .keychain_seal => {
                 // Multi-buffer seal requests use KeychainPort IPC until UTM marshaling lands.
@@ -89,15 +103,7 @@ pub const Dispatcher = struct {
                 @memcpy(out_ptr[0..n], buf[0..n]);
                 return .{ .code = 0, .data = n };
             },
-            .log => {
-                const str_ptr = @as([*]const u8, @ptrFromInt(a1));
-                const len_raw: usize = @intCast(a2);
-                const len = @min(len_raw, 256);
-                main.printString("[adapter] ");
-                main.printString(str_ptr[0..len]);
-                main.printString("\n");
-                return .{ .code = 0, .data = 0 };
-            },
+            else => return .{ .code = 1, .data = 0 },
         }
     }
 };

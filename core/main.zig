@@ -155,6 +155,17 @@ export fn clarigggz_thread_yield() void {
     cooperativeYield();
 }
 
+export fn clarigggz_adapter_log(ptr: [*]const u8, len: usize) void {
+    const capped = @min(len, 256);
+    printString("[adapter] ");
+    printString(ptr[0..capped]);
+    printString("\n");
+}
+
+export fn clarigggz_submit_intent(tap_id: u16, timestamp: u64, biometric: bool) void {
+    handlePhysicalIntent(tap_id, timestamp, biometric);
+}
+
 /// Broker idle loop — runs after boot init, schedules adapter threads cooperatively.
 fn brokerLoop() noreturn {
     while (true) {
@@ -323,7 +334,7 @@ export fn kmain() noreturn {
         printString("[Boot] map: framebuffer...\n");
         waveguide_fb = framebuffer_mod.Framebuffer.init(framebuffer_mod.Framebuffer.default_base);
         // TODO: Re-enable full FB mapping once SV39 alias bug is fixed.
-        kernel_aspace.map(framebuffer_mod.Framebuffer.default_base, framebuffer_mod.Framebuffer.default_base, paging.PTE.Flags.valid | paging.PTE.Flags.read | paging.PTE.Flags.write | paging.PTE.Flags.user) catch {};
+        kernel_aspace.map(framebuffer_mod.Framebuffer.default_base, framebuffer_mod.Framebuffer.default_base, paging.PTE.Flags.valid | paging.PTE.Flags.read | paging.PTE.Flags.write) catch {};
         printString("[Boot] map: framebuffer done\n");
     }
 

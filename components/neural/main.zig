@@ -7,13 +7,8 @@ pub const std_options_debug_threaded_io: ?*anyopaque = null;
 fn adapterMain() void {
     runtime.log("neural-engine: RVV tensor adapter online");
 
-    var a = [_]f16{1.0} ** 64;
-    var b = [_]f16{2.0} ** 64;
-    var out = [_]f16{0.0} ** 64;
-
     var loops: usize = 0;
     while (loops < 100) : (loops += 1) {
-        matmulRVV(&a, &b, &out);
         runtime.yield();
     }
 }

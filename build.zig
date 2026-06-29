@@ -2,16 +2,24 @@ const std = @import("std");
 
 pub fn build(b: *std.Build) void {
     // --- Target Configuration ---
+    const riscv_query = std.Target.Query{
+        .cpu_arch = .riscv64,
+        .os_tag = .freestanding,
+        .cpu_model = .{ .explicit = &std.Target.riscv.cpu.generic_rv64 },
+    };
+    const riscv_rvv_query = std.Target.Query{
+        .cpu_arch = .riscv64,
+        .os_tag = .freestanding,
+        .cpu_model = .{ .explicit = &std.Target.riscv.cpu.generic_rv64 },
+        .cpu_features_add = std.Target.riscv.featureSet(&.{.v}),
+    };
     const target = b.standardTargetOptions(.{
-        .default_target = .{
-            .cpu_arch = .riscv64,
-            .os_tag = .freestanding,
-            .cpu_model = .{ .explicit = &std.Target.riscv.cpu.generic_rv64 },
-            .cpu_features_add = std.Target.riscv.featureSet(&.{.v}),
-        },
+        .default_target = riscv_rvv_query,
     });
     const optimize = b.standardOptimizeOption(.{});
     const target_info = target.result;
+    const kernel_riscv_target = b.resolveTargetQuery(riscv_query);
+    const rvv_riscv_target = b.resolveTargetQuery(riscv_rvv_query);
 
     // Set the install prefix to 'bin/' as mandated by AGENTS.md
     b.install_path = "bin";
@@ -57,7 +65,7 @@ pub fn build(b: *std.Build) void {
         .name = "clarigggz-kernel",
         .root_module = b.createModule(.{
             .root_source_file = b.path("core/main.zig"),
-            .target = target,
+            .target = kernel_riscv_target,
             .optimize = optimize,
         }),
     });
@@ -91,9 +99,13 @@ pub fn build(b: *std.Build) void {
     };
     var adapter_mods: [adapter_modules.len]*std.Build.Module = undefined;
     for (adapter_modules, 0..) |am, i| {
+        const adapter_target = if (std.mem.eql(u8, am.name, "neural_adapter"))
+            rvv_riscv_target
+        else
+            kernel_riscv_target;
         const mod = b.createModule(.{
             .root_source_file = b.path(am.path),
-            .target = target,
+            .target = adapter_target,
             .optimize = optimize,
         });
         mod.addImport("protocols", protocols_module);
@@ -119,11 +131,15 @@ pub fn build(b: *std.Build) void {
     const components_step = b.step("components", "Build all user-space adapters");
 
     for (component_targets) |target_info_item| {
+        const component_target = if (std.mem.eql(u8, target_info_item.name, "neural-engine"))
+            rvv_riscv_target
+        else
+            kernel_riscv_target;
         const comp_exe = b.addExecutable(.{
             .name = b.fmt("clarigggz-{s}", .{target_info_item.name}),
             .root_module = b.createModule(.{
                 .root_source_file = b.path(target_info_item.path),
-                .target = target,
+                .target = component_target,
                 .optimize = optimize,
             }),
         });
