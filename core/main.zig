@@ -263,13 +263,18 @@ export fn kmain() noreturn {
 
     // Map PLIC, CLINT, secure enclave MMIO, and waveguide framebuffer
     if (comptime builtin.os.tag == .freestanding) {
+        printString("[Boot] map: PLIC...\n");
         kernel_aspace.map(plic_base, plic_base, paging.PTE.Flags.valid | paging.PTE.Flags.read | paging.PTE.Flags.write) catch {};
+        printString("[Boot] map: CLINT...\n");
         kernel_aspace.map(clint_base, clint_base, paging.PTE.Flags.valid | paging.PTE.Flags.read | paging.PTE.Flags.write) catch {};
+        printString("[Boot] map: enclave...\n");
         kernel_aspace.map(enclave_base, enclave_base, paging.PTE.Flags.valid | paging.PTE.Flags.read | paging.PTE.Flags.write) catch {};
+        printString("[Boot] map: framebuffer...\n");
         waveguide_fb = framebuffer_mod.Framebuffer.init(framebuffer_mod.Framebuffer.default_base);
         waveguide_fb.mapRegion(kernel_aspace) catch {
             printString("[Panic] Failed to map waveguide framebuffer!\n");
         };
+        printString("[Boot] map: framebuffer done\n");
     }
 
     // Enable paging: load satp and flush TLB
