@@ -160,15 +160,17 @@ Honest snapshot of what exists today vs. what is planned.
 | Buddy allocator | ✅ | Deterministic kernel heap |
 | Capability lists | ✅ | 128-bit caps, derive/grant/revoke |
 | IPC router | ✅ | Sync send/recv blocking, port queues |
-| Priority scheduler | 🟡 | Queues + RVV-aware context struct; ASM switch TODO |
-| Syscall dispatcher | 🟡 | Trap entry wired; full user-mode path in progress |
-| Physical intent | 🟡 | Tap-sequence verifier scaffold |
-| Protocol ports | ✅ | Display, Input, Neural, IPC schemas |
-| Compositor adapter | 🟡 | Desktop demo + software blend; RVV blend stub |
-| Neural adapter | 🟡 | RVV f16 multiply demo |
-| Tactile ID adapter | 🟡 | Scaffold |
-| x86_64 simulator | ✅ | MMIO + IRQ mock, IPC event loop, desktop draw |
+| Priority scheduler | ✅ | Cooperative `riscv_switch_context` + priority queues |
+| Syscall dispatcher | ✅ | ecall trap path, yield/ipc/submit_intent syscalls |
+| Physical intent | ✅ | Tap-sequence verifier wired to SecurityManager |
+| Protocol ports | ✅ | Display, Input, Neural, IPC + `protocols/runtime.zig` |
+| Adapter loader | ✅ | Spawns compositor, neural, tactile as kernel threads |
+| Compositor adapter | ✅ | Kernel-threaded adapter with yield loop |
+| Neural adapter | ✅ | RVV f16 multiply + yield loop |
+| Tactile ID adapter | ✅ | Intent-to-unlock via `submit_intent` syscall |
+| x86_64 simulator | ✅ | IRQ → IPC → security unlock demo |
 | Agent runtime / Llama | ⬜ | Phase 2 roadmap |
+| ELF adapter loader | ⬜ | Load external adapter binaries from storage |
 | Waveguide compositor (HW) | ⬜ | Phase 3 roadmap |
 
 See [`TODO.md`](TODO.md) for the phased roadmap.
