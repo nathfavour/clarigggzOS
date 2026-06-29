@@ -155,7 +155,6 @@ export fn k_trap_handler(scause: u64, sepc: u64, stval: u64, syscall_a0: u64, sy
     const code = scause & 0xFFF;
 
     if (is_interrupt) {
-        const code = scause & 0xFFF;
         if (comptime builtin.os.tag == .freestanding) {
             if (code == 9) {
                 irq_router.dispatchPending(&ipc_router, &core_scheduler, onAgentIrq);

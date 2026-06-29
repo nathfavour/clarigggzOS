@@ -98,6 +98,26 @@ pub fn main() !void {
     }
     std.debug.print("Security state: {s}\n", .{@tagName(security_mgr.state)});
 
+    std.debug.print("\n--- Agent Runtime ---\n", .{});
+    var agent_rt = core.agent_runtime_mod.AgentRuntime.init();
+    const planner_id = try agent_rt.register("spatial-planner", 4, 0);
+    const vision_id = try agent_rt.register("vision-agent", 6, 0);
+    std.debug.print("Registered agents: planner={}, vision={}\n", .{ planner_id, vision_id });
+    agent_rt.tick();
+    std.debug.print("Agent tick count: {}\n", .{agent_rt.tick_count});
+
+    std.debug.print("\n--- Secure Enclave ---\n", .{});
+    var enclave = core.secure_enclave_mod.SecureEnclave.init(0);
+    enclave.appendLiability("SIM: liability shift recorded");
+    enclave.storeBiometricDigest(&[_]u8{ 0xDE, 0xAD, 0xBE, 0xEF });
+    std.debug.print("Enclave records: {}\n", .{enclave.recordCount()});
+
+    std.debug.print("\n--- Waveguide Framebuffer ---\n", .{});
+    var fb = core.framebuffer_mod.Framebuffer.init(core.framebuffer_mod.Framebuffer.default_base);
+    const info = fb.info();
+    std.debug.print("Framebuffer {}x{} @ 0x{x}\n", .{ info.width, info.height, info.base_addr });
+    _ = fb.signalVsync();
+
     std.debug.print("\n--- Display Environment: Loading Desktop ---\n", .{});
     const desktop = compositor.DesktopEnvironment.init();
     desktop.draw();

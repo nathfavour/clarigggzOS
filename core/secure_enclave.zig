@@ -26,10 +26,10 @@ pub const SecureEnclave = struct {
 
     pub fn appendLiability(self: *SecureEnclave, message: []const u8) void {
         if (comptime builtin.os.tag != .freestanding) {
-            self.write_index = (self.write_index + 1) % max_records;
+            self.write_index = @intCast((self.write_index + 1) % max_records);
             return;
         }
-        const idx = self.write_index % max_records;
+        const idx: u32 = @intCast(self.write_index % max_records);
         const dest = self.slot(idx);
         const len = @min(message.len, record_size - 1);
         var i: usize = 0;

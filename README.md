@@ -164,14 +164,17 @@ Honest snapshot of what exists today vs. what is planned.
 | Syscall dispatcher | ✅ | ecall trap path, yield/ipc/submit_intent syscalls |
 | Physical intent | ✅ | Tap-sequence verifier wired to SecurityManager |
 | Protocol ports | ✅ | Display, Input, Neural, IPC + `protocols/runtime.zig` |
-| Adapter loader | ✅ | Spawns compositor, neural, tactile as kernel threads |
-| Compositor adapter | ✅ | Kernel-threaded adapter with yield loop |
+| Adapter loader | ✅ | Spawns compositor, neural, tactile, agent as kernel threads |
+| Compositor adapter | ✅ | Waveguide FB at `0x81000000` on freestanding; desktop on host |
 | Neural adapter | ✅ | RVV f16 multiply + yield loop |
 | Tactile ID adapter | ✅ | Intent-to-unlock via `submit_intent` syscall |
-| x86_64 simulator | ✅ | IRQ → IPC → security unlock demo |
-| Agent runtime / Llama | ⬜ | Phase 2 roadmap |
-| ELF adapter loader | ⬜ | Load external adapter binaries from storage |
-| Waveguide compositor (HW) | ⬜ | Phase 3 roadmap |
+| Agent runtime adapter | ✅ | `AgentPort` protocol + tick scheduler stub |
+| ELF adapter loader | ✅ | `core/elf_loader.zig`; `zig build embed-adapters` stages blobs |
+| PLIC / CLINT / IRQ router | ✅ | MMIO + IRQ → IPC delivery to adapter ports |
+| Secure enclave (stub) | ✅ | Write-only MMIO liability + biometric digest sealing |
+| x86_64 simulator | ✅ | IRQ → IPC → security + agent + enclave + FB demos |
+| Local LLM inference | ⬜ | Real on-device model execution (Phase 2 roadmap) |
+| Hardware TEE / TrustZone | ⬜ | Silicon-backed secure world integration |
 
 See [`TODO.md`](TODO.md) for the phased roadmap.
 
