@@ -80,6 +80,12 @@ pub fn main() !void {
         std.debug.print("Tactile Adapter: Message received, protocol=0x{X}\n", .{delivered.protocol_id});
     }
 
+    std.debug.print("\n--- Clarigggz Keychain (TEE stub) ---\n", .{});
+    var keychain = core.tee_mod.initKeychain();
+    const passkey_id = try keychain.storePasskey("glasses.local", &[_]u8{ 0xC0, 0xFF, 0xEE });
+    std.debug.print("Stored passkey item id={}\n", .{passkey_id});
+    std.debug.print("TEE backend: {s}\n", .{@tagName(keychain.backendKind())});
+
     std.debug.print("\n--- Security: Intent-to-Unlock Pipeline ---\n", .{});
     var security_mgr = core.security.SecurityManager{};
     var tap_verifier = core.physical_intent.PhysicalSequenceVerifier{};
@@ -98,6 +104,11 @@ pub fn main() !void {
     }
     std.debug.print("Security state: {s}\n", .{@tagName(security_mgr.state)});
 
+    std.debug.print("\n--- Secure Enclave (legacy path via keychain) ---\n", .{});
+    keychain.appendLiability("SIM: liability shift recorded");
+    _ = try keychain.storeBiometricTemplate("tactile-id", &[_]u8{ 0xDE, 0xAD, 0xBE, 0xEF });
+    std.debug.print("Keychain items sealed: {}\n", .{keychain.item_count});
+
     std.debug.print("\n--- Agent Runtime ---\n", .{});
     var agent_rt = core.agent_runtime_mod.AgentRuntime.init();
     const planner_id = try agent_rt.register("spatial-planner", 4, 0);
@@ -105,12 +116,6 @@ pub fn main() !void {
     std.debug.print("Registered agents: planner={}, vision={}\n", .{ planner_id, vision_id });
     agent_rt.tick();
     std.debug.print("Agent tick count: {}\n", .{agent_rt.tick_count});
-
-    std.debug.print("\n--- Secure Enclave ---\n", .{});
-    var enclave = core.secure_enclave_mod.SecureEnclave.init(0);
-    enclave.appendLiability("SIM: liability shift recorded");
-    enclave.storeBiometricDigest(&[_]u8{ 0xDE, 0xAD, 0xBE, 0xEF });
-    std.debug.print("Enclave records: {}\n", .{enclave.recordCount()});
 
     std.debug.print("\n--- Waveguide Framebuffer ---\n", .{});
     var fb = core.framebuffer_mod.Framebuffer.init(core.framebuffer_mod.Framebuffer.default_base);

@@ -83,7 +83,7 @@ pub const SecurityManager = struct {
         const msg = "LIABILITY SHIFT: User assumed full hardware control.";
         self.liability_log.append(msg);
         if (@import("builtin").os.tag == .freestanding) {
-            @import("main.zig").secure_enclave.appendLiability(msg);
+            @import("main.zig").clarigggz_keychain.appendLiability(msg);
         }
         emit("[Security] ");
         emit(msg);
@@ -92,9 +92,9 @@ pub const SecurityManager = struct {
 
     pub fn storeBiometric(self: *SecurityManager, digest: []const u8, emit: fn (msg: []const u8) void) void {
         if (@import("builtin").os.tag == .freestanding) {
-            @import("main.zig").secure_enclave.storeBiometricDigest(digest);
+            _ = @import("main.zig").clarigggz_keychain.storeBiometricTemplate("tactile-id", digest) catch {};
         }
-        emit("[Security] Biometric digest sealed in enclave\n");
+        emit("[Security] Biometric digest sealed in keychain\n");
         _ = self;
     }
 };

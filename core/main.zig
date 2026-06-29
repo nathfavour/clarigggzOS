@@ -93,6 +93,7 @@ pub const plic_dev = @import("plic.zig");
 pub const irq_router_mod = @import("irq_router.zig");
 pub const framebuffer_mod = @import("framebuffer.zig");
 pub const secure_enclave_mod = @import("secure_enclave.zig");
+pub const tee_mod = @import("tee/root.zig");
 pub const agent_runtime_mod = @import("agent_runtime.zig");
 
 pub var kernel_heap: memory.KernelHeap = undefined;
@@ -111,7 +112,7 @@ pub var current_thread: ?*scheduler.Thread = null;
 pub var scheduler_ctx: scheduler.CpuContext = .{};
 pub var waveguide_fb: framebuffer_mod.Framebuffer = undefined;
 pub var irq_router: irq_router_mod.IrqRouter = undefined;
-pub var secure_enclave: secure_enclave_mod.SecureEnclave = undefined;
+pub var clarigggz_keychain: tee_mod.Keychain = undefined;
 pub var agent_runtime: agent_runtime_mod.AgentRuntime = undefined;
 pub var clint_dev: plic_dev.Clint = undefined;
 
@@ -125,7 +126,7 @@ pub const plic_base = switch (current_hardware) {
 };
 
 pub const clint_base = plic_dev.Clint.qemu_virt_base;
-pub const enclave_base = secure_enclave_mod.SecureEnclave.qemu_virt_base;
+pub const enclave_base = tee_mod.layout.active.legacy_stub_enclave_base;
 
 const syscall = @import("syscall.zig");
 
@@ -302,13 +303,16 @@ export fn kmain() noreturn {
     // 4. Initialize Security, IRQ, Agent, and Display subsystems
     security_manager = security.SecurityManager{};
     tap_verifier = physical_intent.PhysicalSequenceVerifier{};
-    secure_enclave = secure_enclave_mod.SecureEnclave.init(enclave_base);
+    clarigggz_keychain = tee_mod.initKeychain();
     irq_router = irq_router_mod.IrqRouter.init(plic_base);
     clint_dev = plic_dev.Clint.init(clint_base);
     agent_runtime = agent_runtime_mod.AgentRuntime.init();
     _ = agent_runtime.register("spatial-planner", 4, 0) catch 0;
     _ = agent_runtime.register("vision-agent", 6, 0) catch 0;
-    printString("[Boot] Agent runtime online (2 agents)\n");
+    const tee_tag = @tagName(clarigggz_keychain.backendKind());
+    printString("[Boot] Clarigggz Keychain online (TEE=");
+    printString(tee_tag);
+    printString(")\n");
 
     // 5. Initialize the Root Capability List
     printString("[Boot] Initializing Root CList...\n");

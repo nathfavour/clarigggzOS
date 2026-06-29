@@ -3,4 +3,5 @@ pub const display = @import("display.zig");
 pub const input = @import("input.zig");
 pub const neural = @import("neural.zig");
 pub const agent = @import("agent.zig");
+pub const keychain = @import("keychain.zig");
 pub const runtime = @import("runtime.zig");

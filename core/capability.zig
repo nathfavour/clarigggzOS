@@ -9,6 +9,8 @@ pub const CapType = enum(u8) {
     ipc_endpoint = 2, // Permission to send/receive to a specific port
     irq = 3,       // Permission to handle a specific hardware interrupt
     device = 4,    // Access to MMIO registers for a specific device
+    enclave = 5,   // Permission to run/resume a Keystone enclave (object_id = EID)
+    keychain_slot = 6, // Permission to open a sealed keychain item (object_id = item_id)
 };
 
 /// A single Capability entry. 128 bits total for cache-line alignment and speed.
@@ -47,7 +49,7 @@ pub const Capability = struct {
                     .limit = sub_limit,
                 };
             },
-            .ipc_endpoint, .irq => {
+            .ipc_endpoint, .irq, .keychain_slot, .enclave => {
                 return Capability{
                     .cap_type = self.cap_type,
                     .rights = child_rights,

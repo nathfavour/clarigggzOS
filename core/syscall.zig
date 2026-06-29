@@ -10,6 +10,8 @@ pub const Syscall = enum(u64) {
     yield = 3,
     get_cap = 4,
     submit_intent = 5,
+    keychain_seal = 6,
+    keychain_open = 7,
     log = 255,
 };
 
@@ -76,6 +78,21 @@ pub const Dispatcher = struct {
                 const biometric = a3 != 0;
                 main.handlePhysicalIntent(tap_id, timestamp, biometric);
                 return .{ .code = 0, .data = @intFromEnum(main.security_manager.state) };
+            },
+            .keychain_seal => {
+                // Multi-buffer seal requests use KeychainPort IPC until UTM marshaling lands.
+                return .{ .code = 4, .data = 0 };
+            },
+            .keychain_open => {
+                const cap_index: usize = @intCast(a1);
+                const item_id: u32 = @intCast(a2);
+                const out_ptr = @as([*]u8, @ptrFromInt(a3));
+                var buf: [main.tee_mod.keychain.max_blob_len]u8 = undefined;
+                const n = main.clarigggz_keychain.open(current_thread.clist, cap_index, item_id, &buf) catch {
+                    return .{ .code = 1, .data = 0 };
+                };
+                @memcpy(out_ptr[0..n], buf[0..n]);
+                return .{ .code = 0, .data = n };
             },
             .log => {
                 const str_ptr = @as([*]const u8, @ptrFromInt(a1));

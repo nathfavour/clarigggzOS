@@ -21,6 +21,7 @@ This project maintains a local documentation cache for reliability and version-p
 2. **Standard library (`std`)**: Do **not** guess. Consult source at `${ZIG_LIB_DIR}/std/`.
 3. **Project architecture**: Read `ARCHITECTURE.md`, `docs/docs/ARCHITECTURE.md`, and `docs/docs/CONSTITUTION.md` before proposing structural changes.
 4. **Implementation status**: Check `README.md` and `TODO.md` for honest progress before marking work complete.
+5. **TEE / Keychain**: Read `docs/docs/KEYSTONE_INTEGRATION.md` before changing `core/tee/` or security-sensitive paths. Upstream TEE lives at `~/code/nathfavour/keystore/keystone-zig` (WIP — do not modify from this repo).
 
 ## 🧩 Agent Skills
 

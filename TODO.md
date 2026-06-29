@@ -32,10 +32,12 @@ Status key: `[x]` done · `[~]` partial · `[ ]` not started
 - [x] **Physical Sequence Verifier**: Tap-sequence logic in `core/physical_intent.zig`
 - [x] **Security Manager Wiring**: `handleTactileEvent` → `attemptUnlock` → liability log
 - [x] **Liability Logger**: Ring buffer + UART emit on unlock
-- [~] **TrustZone / Secure Enclave**: Write-only MMIO enclave at `0x10001000` (software stub; HW TEE pending)
+- [~] **TrustZone / Secure Enclave**: Clarigggz Keychain + TEE backend abstraction; Keystone SM integration WIP ([KEYSTONE_INTEGRATION.md](docs/docs/KEYSTONE_INTEGRATION.md))
 
 ## Phase 6: Simulator Parity (x86_64)
 - [x] **K1 Peripheral Mocks**: MMIO and IRQ controller mocks in `simulator/`
 - [x] **End-to-End Protocol Loop**: IRQ → IPC → adapter + security unlock demo
 - [x] **Agent / Enclave / Framebuffer Demos**: Simulator exercises new Phase 2 subsystems
+- [ ] **Keystone TEE native boot**: SM reset vector + `-Dtee_backend=keystone` end-to-end on QEMU
+- [ ] **Keychain secure enclave**: Move seal/open into `wallet-core` / `biometric` enclaves
 - [ ] **RVV Emulation Support**: QEMU RVV or host-side vector mapping for neural tests

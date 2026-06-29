@@ -23,14 +23,22 @@ pub fn build(b: *std.Build) void {
         "Target hardware platform (qemu_virt or spacemit_k1)",
     ) orelse "qemu_virt";
 
+    const tee_backend = b.option(
+        []const u8,
+        "tee_backend",
+        "TEE backend: stub or keystone",
+    ) orelse "stub";
+
     const options = b.addOptions();
     options.addOption([]const u8, "hardware", hw_target);
     options.addOption(bool, "kernel_adapter", false);
+    options.addOption([]const u8, "tee_backend", tee_backend);
     const options_mod = options.createModule();
 
     const kernel_adapter_options = b.addOptions();
     kernel_adapter_options.addOption([]const u8, "hardware", hw_target);
     kernel_adapter_options.addOption(bool, "kernel_adapter", true);
+    kernel_adapter_options.addOption([]const u8, "tee_backend", tee_backend);
     const kernel_adapter_options_mod = kernel_adapter_options.createModule();
 
     // --- Modules ---

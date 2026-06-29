@@ -171,7 +171,8 @@ Honest snapshot of what exists today vs. what is planned.
 | Agent runtime adapter | ✅ | `AgentPort` protocol + tick scheduler stub |
 | ELF adapter loader | ✅ | `core/elf_loader.zig`; `zig build embed-adapters` stages blobs |
 | PLIC / CLINT / IRQ router | ✅ | MMIO + IRQ → IPC delivery to adapter ports |
-| Secure enclave (stub) | ✅ | Write-only MMIO liability + biometric digest sealing |
+| Secure enclave (stub) | ✅ | Clarigggz Keychain with `stub` TEE backend |
+| Keystone TEE (native) | 🚧 | `keystone-zig` SM integration — see [KEYSTONE_INTEGRATION.md](docs/docs/KEYSTONE_INTEGRATION.md) |
 | x86_64 simulator | ✅ | IRQ → IPC → security + agent + enclave + FB demos |
 | Local LLM inference | ⬜ | Real on-device model execution (Phase 2 roadmap) |
 | Hardware TEE / TrustZone | ⬜ | Silicon-backed secure world integration |
