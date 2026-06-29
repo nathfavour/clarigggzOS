@@ -91,7 +91,9 @@ pub const AddressSpace = struct {
             break :blk table;
         } else blk: {
             const raw_ptr = kernel_alloc(512 * @sizeOf(PTE), 4096) orelse return error.OutOfMemory;
-            break :blk @as([*]PTE, @ptrCast(@alignCast(raw_ptr)))[0..512];
+            const table = @as([*]PTE, @ptrCast(@alignCast(raw_ptr)))[0..512];
+            @memset(table, @bitCast(@as(u64, 0)));
+            break :blk table;
         };
 
         parent_pte.* = .{

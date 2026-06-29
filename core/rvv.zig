@@ -49,22 +49,12 @@ pub fn logStatus(print: fn ([]const u8) void) void {
 }
 
 fn printUsize(val: usize, print: fn ([]const u8) void) void {
-    var buf: [24]u8 = undefined;
-    var n = val;
-    var i: usize = 0;
-    if (n == 0) {
-        print("0");
+    var buf: [32]u8 = undefined;
+    const out = std.fmt.bufPrint(&buf, "{d}", .{val}) catch {
+        print("?");
         return;
-    }
-    while (n > 0) : (i += 1) {
-        buf[i] = @intCast('0' + (n % 10));
-        n /= 10;
-    }
-    while (i > 0) {
-        i -= 1;
-        const s = buf[i .. i + 1];
-        print(s);
-    }
+    };
+    print(out);
 }
 
 test "RVV init on host" {

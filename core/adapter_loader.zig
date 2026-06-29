@@ -85,12 +85,19 @@ pub const Loader = struct {
             const stack_top = stack_base + stack_bytes;
 
             var page: u64 = stack_base;
+            var stack_map_failed = false;
             while (page < stack_top) : (page += paging.AddressSpace.PageSize) {
                 kernel_aspace.map(page, page, paging.PTE.Flags.valid | paging.PTE.Flags.read | paging.PTE.Flags.write | paging.PTE.Flags.user) catch {
-                    print("[Loader] Failed to map adapter stack\n");
-                    break;
+                    // Kernel heap pages are identity-mapped during early boot, so
+                    // stack pages can legitimately already exist in the page table.
+                    if (kernel_aspace.translate(page) == null) {
+                        print("[Loader] Failed to map adapter stack\n");
+                        stack_map_failed = true;
+                        break;
+                    }
                 };
             }
+            if (stack_map_failed) continue;
 
             const clist_raw = kernel_alloc(@sizeOf(capability.CList), @alignOf(capability.CList)) orelse {
                 print("[Loader] Out of memory for adapter CList\n");

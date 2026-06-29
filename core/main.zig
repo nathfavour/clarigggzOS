@@ -161,7 +161,6 @@ export fn k_trap_handler(scause: u64, sepc: u64, stval: u64, syscall_a0: u64, sy
                 irq_router.dispatchPending(&ipc_router, &core_scheduler, onAgentIrq);
             } else if (code == 5) {
                 irq_router.vsync_count += 1;
-                clint_dev.armTimer(0, 16_666_666);
             }
         }
         return sepc;
@@ -264,16 +263,25 @@ export fn kmain() noreturn {
     // Map PLIC, CLINT, secure enclave MMIO, and waveguide framebuffer
     if (comptime builtin.os.tag == .freestanding) {
         printString("[Boot] map: PLIC...\n");
-        kernel_aspace.map(plic_base, plic_base, paging.PTE.Flags.valid | paging.PTE.Flags.read | paging.PTE.Flags.write) catch {};
+        const plic_span: u64 = 0x210000; // Covers enable, threshold, and claim/complete windows
+        var plic_page: u64 = plic_base;
+        const plic_end = plic_base + plic_span;
+        while (plic_page < plic_end) : (plic_page += paging.AddressSpace.PageSize) {
+            kernel_aspace.map(plic_page, plic_page, paging.PTE.Flags.valid | paging.PTE.Flags.read | paging.PTE.Flags.write) catch {};
+        }
         printString("[Boot] map: CLINT...\n");
-        kernel_aspace.map(clint_base, clint_base, paging.PTE.Flags.valid | paging.PTE.Flags.read | paging.PTE.Flags.write) catch {};
+        const clint_span: u64 = 0x10000; // Covers mtimecmp and mtime windows
+        var clint_page: u64 = clint_base;
+        const clint_end = clint_base + clint_span;
+        while (clint_page < clint_end) : (clint_page += paging.AddressSpace.PageSize) {
+            kernel_aspace.map(clint_page, clint_page, paging.PTE.Flags.valid | paging.PTE.Flags.read | paging.PTE.Flags.write) catch {};
+        }
         printString("[Boot] map: enclave...\n");
         kernel_aspace.map(enclave_base, enclave_base, paging.PTE.Flags.valid | paging.PTE.Flags.read | paging.PTE.Flags.write) catch {};
         printString("[Boot] map: framebuffer...\n");
         waveguide_fb = framebuffer_mod.Framebuffer.init(framebuffer_mod.Framebuffer.default_base);
-        waveguide_fb.mapRegion(kernel_aspace) catch {
-            printString("[Panic] Failed to map waveguide framebuffer!\n");
-        };
+        // TODO: Re-enable full FB mapping once SV39 alias bug is fixed.
+        kernel_aspace.map(framebuffer_mod.Framebuffer.default_base, framebuffer_mod.Framebuffer.default_base, paging.PTE.Flags.valid | paging.PTE.Flags.read | paging.PTE.Flags.write | paging.PTE.Flags.user) catch {};
         printString("[Boot] map: framebuffer done\n");
     }
 
@@ -383,9 +391,8 @@ export fn kmain() noreturn {
             }
         }
 
-        clint_dev.armTimer(0, 16_666_666);
         asm volatile ("csrs sstatus, %[sie]" : : [sie] "r" (@as(u64, 1 << 1)));
-        asm volatile ("csrs sie, %[mask]" : : [mask] "r" (@as(u64, (1 << 9) | (1 << 5))));
+        asm volatile ("csrs sie, %[mask]" : : [mask] "r" (@as(u64, (1 << 9))));
 
         printString("[Boot] Adapter load complete.\n");
     }
