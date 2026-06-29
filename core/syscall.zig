@@ -96,7 +96,8 @@ pub const Dispatcher = struct {
             },
             .log => {
                 const str_ptr = @as([*]const u8, @ptrFromInt(a1));
-                const len: usize = @intCast(a2);
+                const len_raw: usize = @intCast(a2);
+                const len = @min(len_raw, 256);
                 main.printString("[adapter] ");
                 main.printString(str_ptr[0..len]);
                 main.printString("\n");

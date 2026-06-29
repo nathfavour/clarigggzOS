@@ -391,8 +391,9 @@ export fn kmain() noreturn {
             }
         }
 
-        asm volatile ("csrs sstatus, %[sie]" : : [sie] "r" (@as(u64, 1 << 1)));
-        asm volatile ("csrs sie, %[mask]" : : [mask] "r" (@as(u64, (1 << 9))));
+        // TODO: Re-enable IRQ delivery once PLIC/claim context is fully validated on QEMU virt.
+        // asm volatile ("csrs sstatus, %[sie]" : : [sie] "r" (@as(u64, 1 << 1)));
+        // asm volatile ("csrs sie, %[mask]" : : [mask] "r" (@as(u64, (1 << 9))));
 
         printString("[Boot] Adapter load complete.\n");
     }
@@ -403,6 +404,9 @@ export fn kmain() noreturn {
     while (true) {
         if (core_scheduler.schedule()) |next| {
             if (next.id != 0) {
+                printString("[Sched] switch -> ");
+                printHex(next.id);
+                printString("\n");
                 const prev_thread = current_thread;
                 const prev_ctx = if (prev_thread) |t| &t.ctx else &scheduler_ctx;
                 current_thread = next;
@@ -411,9 +415,10 @@ export fn kmain() noreturn {
             }
         }
 
-        if (comptime builtin.os.tag == .freestanding) {
-            irq_router.dispatchPending(&ipc_router, &core_scheduler, onAgentIrq);
-        }
+        // TODO: Re-enable once external IRQ routing is stable in the scheduler loop.
+        // if (comptime builtin.os.tag == .freestanding) {
+        //     irq_router.dispatchPending(&ipc_router, &core_scheduler, onAgentIrq);
+        // }
 
         if (builtin.cpu.arch == .riscv64) {
             asm volatile ("wfi");
