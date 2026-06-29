@@ -84,16 +84,11 @@ fn adapterMain() void {
     if (comptime @import("builtin").os.tag == .freestanding) {
         const px: [*]u32 = @ptrFromInt(fb_base);
         const w: u32 = 640;
-        const h: u32 = 480;
-        var i: usize = 0;
-        const total = @as(usize, w) * @as(usize, h);
-        while (i < total) : (i += 1) {
-            px[i] = 0xFF0A0E27;
-        }
-        var y: u32 = 80;
-        while (y < 200) : (y += 1) {
-            var x: u32 = 80;
-            while (x < 560) : (x += 1) {
+        // Boot splash only — full compositor pass runs once adapters are isolated.
+        var y: u32 = 0;
+        while (y < 64) : (y += 1) {
+            var x: u32 = 0;
+            while (x < 64) : (x += 1) {
                 px[@as(usize, y) * w + x] = 0xC022D3EE;
             }
         }
@@ -152,9 +147,18 @@ fn startShim() callconv(.c) noreturn {
     clarigggz_compositor_entry();
 }
 
+fn threadYieldEcall() callconv(.c) void {
+    asm volatile (
+        \\li a0, 3
+        \\ecall
+        ::: .{ .memory = true }
+    );
+}
+
 comptime {
     if (builtin.os.tag == .freestanding and !config.kernel_adapter) {
         @export(&startShim, .{ .name = "_start", .linkage = .strong });
+        @export(&threadYieldEcall, .{ .name = "clarigggz_thread_yield", .linkage = .weak });
     }
 }
 

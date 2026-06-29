@@ -109,7 +109,7 @@ pub var security_manager: security.SecurityManager = undefined;
 pub var tap_verifier: physical_intent.PhysicalSequenceVerifier = undefined;
 pub var kernel_aspace_storage: paging.AddressSpace = undefined;
 pub var current_thread: ?*scheduler.Thread = null;
-pub var scheduler_ctx: scheduler.CpuContext = .{};
+pub var broker_ctx: scheduler.CpuContext = .{};
 pub var waveguide_fb: framebuffer_mod.Framebuffer = undefined;
 pub var irq_router: irq_router_mod.IrqRouter = undefined;
 pub var clarigggz_keychain: tee_mod.Keychain = undefined;
@@ -129,6 +129,48 @@ pub const clint_base = plic_dev.Clint.qemu_virt_base;
 pub const enclave_base = tee_mod.layout.active.legacy_stub_enclave_base;
 
 const syscall = @import("syscall.zig");
+
+/// Cooperative yield for kernel-linked adapters (must not switch inside trap handler).
+pub fn cooperativeYield() void {
+    const current = current_thread orelse return;
+    current.state = .ready;
+
+    const next = core_scheduler.schedule() orelse {
+        current.state = .running;
+        return;
+    };
+    if (next.id == current.id) {
+        current.state = .running;
+        return;
+    }
+
+    current_thread = next;
+    scheduler.switch_context(&current.ctx, &next.ctx);
+    current_thread = current;
+    current.state = .running;
+}
+
+/// Cooperative yield entry for kernel-linked adapters (see protocols/runtime.zig).
+export fn clarigggz_thread_yield() void {
+    cooperativeYield();
+}
+
+/// Broker idle loop — runs after boot init, schedules adapter threads cooperatively.
+fn brokerLoop() noreturn {
+    while (true) {
+        if (core_scheduler.schedule()) |next| {
+            if (next.id != 0) {
+                current_thread = next;
+                scheduler.switch_context(&broker_ctx, &next.ctx);
+                current_thread = null;
+            }
+        }
+
+        if (comptime builtin.cpu.arch == .riscv64) {
+            asm volatile ("wfi");
+        }
+    }
+}
 
 pub fn handlePhysicalIntent(tap_id: u16, timestamp: u64, biometric: bool) void {
     security_manager.handleTactileEvent(&tap_verifier, tap_id, timestamp, biometric, printString);
@@ -399,33 +441,7 @@ export fn kmain() noreturn {
     }
 
     printString("[Boot] Entering realtime scheduler loop...\n");
-
-    // Core Loop: priority scheduling with cooperative context switch
-    while (true) {
-        if (core_scheduler.schedule()) |next| {
-            if (next.id != 0) {
-                printString("[Sched] switch -> ");
-                printHex(next.id);
-                printString("\n");
-                const prev_thread = current_thread;
-                const prev_ctx = if (prev_thread) |t| &t.ctx else &scheduler_ctx;
-                current_thread = next;
-                scheduler.switch_context(prev_ctx, &next.ctx);
-                current_thread = prev_thread;
-            }
-        }
-
-        // TODO: Re-enable once external IRQ routing is stable in the scheduler loop.
-        // if (comptime builtin.os.tag == .freestanding) {
-        //     irq_router.dispatchPending(&ipc_router, &core_scheduler, onAgentIrq);
-        // }
-
-        if (builtin.cpu.arch == .riscv64) {
-            asm volatile ("wfi");
-        } else if (builtin.cpu.arch == .x86_64) {
-            asm volatile ("hlt");
-        }
-    }
+    brokerLoop();
 }
 
 pub fn main() void {

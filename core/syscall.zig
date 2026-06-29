@@ -21,15 +21,8 @@ pub const Result = struct {
 };
 
 fn rescheduleFrom(current: *main.scheduler.Thread) void {
-    current.state = .ready;
-    if (main.core_scheduler.schedule()) |next| {
-        main.current_thread = next;
-        if (next.id != current.id) {
-            main.scheduler.switch_context(&current.ctx, &next.ctx);
-        } else {
-            next.state = .running;
-        }
-    }
+    _ = current;
+    // IPC blocking reschedule is not yet wired for kernel-linked adapters.
 }
 
 pub const Dispatcher = struct {
@@ -64,7 +57,9 @@ pub const Dispatcher = struct {
                 return .{ .code = 0, .data = 0 };
             },
             .yield => {
-                rescheduleFrom(current_thread);
+                // Yield must switch outside the trap handler; kernel adapters use
+                // clarigggz_thread_yield() instead of this ecall path.
+                current_thread.state = .ready;
                 return .{ .code = 0, .data = 0 };
             },
             .get_cap => {

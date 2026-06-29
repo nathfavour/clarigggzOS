@@ -66,9 +66,18 @@ fn startShim() callconv(.c) noreturn {
     clarigggz_neural_entry();
 }
 
+fn threadYieldEcall() callconv(.c) void {
+    asm volatile (
+        \\li a0, 3
+        \\ecall
+        ::: .{ .memory = true }
+    );
+}
+
 comptime {
     if (builtin.os.tag == .freestanding and !config.kernel_adapter) {
         @export(&startShim, .{ .name = "_start", .linkage = .strong });
+        @export(&threadYieldEcall, .{ .name = "clarigggz_thread_yield", .linkage = .weak });
     }
 }
 

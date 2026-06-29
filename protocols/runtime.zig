@@ -1,6 +1,9 @@
 const std = @import("std");
 const builtin = @import("builtin");
 
+/// Resolved at link time: kernel provides cooperative switch; standalone ELFs provide ecall stub.
+extern fn clarigggz_thread_yield() void;
+
 /// User-space syscall stubs for adapter processes.
 pub const Syscall = enum(u64) {
     ipc_send = 1,
@@ -13,13 +16,7 @@ pub const Syscall = enum(u64) {
 
 pub fn yield() void {
     if (comptime builtin.cpu.arch == .riscv64 and builtin.os.tag == .freestanding) {
-        asm volatile (
-            \\li a0, 3
-            \\ecall
-            :
-            :
-            : .{ .memory = true }
-        );
+        clarigggz_thread_yield();
     }
 }
 
