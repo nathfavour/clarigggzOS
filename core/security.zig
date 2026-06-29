@@ -53,6 +53,7 @@ pub const SecurityManager = struct {
         self.physical_intent_verified = verifier.verifyTap(tap_id, timestamp);
 
         if (self.physical_intent_verified and biometric) {
+            self.storeBiometric(&[_]u8{ 0xDE, 0xAD, 0xBE, 0xEF }, emit);
             self.attemptUnlock(biometric, true, emit) catch {
                 emit("[Security] Unlock consensus failed\n");
             };
@@ -81,9 +82,20 @@ pub const SecurityManager = struct {
     fn logLiabilityShift(self: *SecurityManager, emit: fn (msg: []const u8) void) !void {
         const msg = "LIABILITY SHIFT: User assumed full hardware control.";
         self.liability_log.append(msg);
+        if (@import("builtin").os.tag == .freestanding) {
+            @import("main.zig").secure_enclave.appendLiability(msg);
+        }
         emit("[Security] ");
         emit(msg);
         emit("\n");
+    }
+
+    pub fn storeBiometric(self: *SecurityManager, digest: []const u8, emit: fn (msg: []const u8) void) void {
+        if (@import("builtin").os.tag == .freestanding) {
+            @import("main.zig").secure_enclave.storeBiometricDigest(digest);
+        }
+        emit("[Security] Biometric digest sealed in enclave\n");
+        _ = self;
     }
 };
 

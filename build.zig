@@ -79,6 +79,7 @@ pub fn build(b: *std.Build) void {
         .{ .name = "compositor_adapter", .path = "components/compositor/main.zig" },
         .{ .name = "neural_adapter", .path = "components/neural/main.zig" },
         .{ .name = "tactile_adapter", .path = "components/tactile_id/main.zig" },
+        .{ .name = "agent_adapter", .path = "components/agent/main.zig" },
     };
     var adapter_mods: [adapter_modules.len]*std.Build.Module = undefined;
     for (adapter_modules, 0..) |am, i| {
@@ -99,6 +100,46 @@ pub fn build(b: *std.Build) void {
     const kernel_step = b.step("kernel", "Build the Clarigggz Microkernel");
     kernel_step.dependOn(&install_kernel.step);
 
+    // --- Components (User-Space Adapters) ---
+    const component_targets = [_]struct { name: []const u8, path: []const u8 }{
+        .{ .name = "compositor", .path = "components/compositor/main.zig" },
+        .{ .name = "tactile-id", .path = "components/tactile_id/main.zig" },
+        .{ .name = "neural-engine", .path = "components/neural/main.zig" },
+        .{ .name = "agent-runtime", .path = "components/agent/main.zig" },
+    };
+
+    const components_step = b.step("components", "Build all user-space adapters");
+
+    for (component_targets) |target_info_item| {
+        const comp_exe = b.addExecutable(.{
+            .name = b.fmt("clarigggz-{s}", .{target_info_item.name}),
+            .root_module = b.createModule(.{
+                .root_source_file = b.path(target_info_item.path),
+                .target = target,
+                .optimize = optimize,
+            }),
+        });
+        comp_exe.root_module.addImport("protocols", protocols_module);
+        comp_exe.root_module.addImport("config", options_mod);
+        const install_comp = b.addInstallArtifact(comp_exe, .{});
+        components_step.dependOn(&install_comp.step);
+    }
+
+    // Copy adapter ELFs into core/blobs/ for optional ELF loading at boot
+    const blobs_dir = "core/blobs";
+    const mkdir_blobs = b.addSystemCommand(&.{ "mkdir", "-p", blobs_dir });
+    const embed_step = b.step("embed-adapters", "Copy adapter ELFs to core/blobs for ELF loader");
+
+    const blob_names = [_][]const u8{ "compositor", "tactile-id", "neural-engine", "agent-runtime" };
+    for (blob_names) |blob_name| {
+        const src = b.fmt("zig-out/bin/clarigggz-{s}", .{blob_name});
+        const dst = b.fmt("core/blobs/{s}.elf", .{blob_name});
+        const cp = b.addSystemCommand(&.{ "cp", src, dst });
+        cp.step.dependOn(components_step);
+        cp.step.dependOn(&mkdir_blobs.step);
+        embed_step.dependOn(&cp.step);
+    }
+
     // Raw binary extraction for QEMU / bare-metal deployment
     const kernel_path = b.getInstallPath(.bin, "clarigggz-kernel");
     const bin_out_path = b.getInstallPath(.bin, "clarigggz.bin");
@@ -113,12 +154,31 @@ pub fn build(b: *std.Build) void {
     const bin_step = b.step("bin", "Generate raw binary clarigggz.bin for QEMU");
     bin_step.dependOn(&objcopy.step);
 
+    // Copy adapter ELFs into core/blobs/ for optional ELF loading at boot
+    const blobs_dir = "core/blobs";
+    const mkdir_blobs = b.addSystemCommand(&.{ "mkdir", "-p", blobs_dir });
+    const embed_step = b.step("embed-adapters", "Copy adapter ELFs to core/blobs for ELF loader");
+
+    const blob_names = [_][]const u8{ "compositor", "tactile-id", "neural-engine", "agent-runtime" };
+    for (blob_names) |blob_name| {
+        const src = b.fmt("zig-out/bin/clarigggz-{s}", .{blob_name});
+        const dst = b.fmt("core/blobs/{s}.elf", .{blob_name});
+        const cp = b.addSystemCommand(&.{ "cp", src, dst });
+        cp.step.dependOn(&install_kernel.step);
+        cp.step.dependOn(components_step);
+        cp.step.dependOn(&mkdir_blobs.step);
+        embed_step.dependOn(&cp.step);
+    }
+
+    kernel_step.dependOn(embed_step);
+
 
     // --- Components (User-Space Adapters) ---
     const component_targets = [_]struct { name: []const u8, path: []const u8 }{
         .{ .name = "compositor", .path = "components/compositor/main.zig" },
         .{ .name = "tactile-id", .path = "components/tactile_id/main.zig" },
         .{ .name = "neural-engine", .path = "components/neural/main.zig" },
+        .{ .name = "agent-runtime", .path = "components/agent/main.zig" },
     };
 
     const components_step = b.step("components", "Build all user-space adapters");

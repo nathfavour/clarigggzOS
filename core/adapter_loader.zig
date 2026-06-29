@@ -26,6 +26,39 @@ pub const Loader = struct {
     loaded_count: usize = 0,
     next_thread_id: u32 = 1,
 
+    pub fn loadElfBlob(
+        self: *Loader,
+        name: []const u8,
+        priority: u8,
+        uses_vectors: bool,
+        blob: []const u8,
+        sched: *scheduler.Scheduler,
+        router: *ipc_transport.Router,
+        kernel_aspace: *paging.AddressSpace,
+    ) void {
+        const elf = @import("elf_loader.zig");
+        const print = @import("main.zig").printString;
+        const thread_id = self.next_thread_id;
+        self.next_thread_id += 1;
+
+        const loaded = elf.ElfLoader.load(blob, name, priority, thread_id, sched, router, kernel_aspace, uses_vectors) catch {
+            print("[Loader] ELF load failed for ");
+            print(name);
+            print("\n");
+            return;
+        };
+
+        if (self.loaded_count < self.loaded.len) {
+            self.loaded[self.loaded_count] = .{
+                .thread = loaded.thread,
+                .clist = loaded.clist,
+                .port_id = loaded.port_id,
+                .stack_base = loaded.load_base,
+            };
+            self.loaded_count += 1;
+        }
+    }
+
     pub fn loadAll(
         self: *Loader,
         sched: *scheduler.Scheduler,

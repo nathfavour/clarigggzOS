@@ -79,14 +79,32 @@ pub const DesktopEnvironment = struct {
 
 fn adapterMain() void {
     runtime.log("compositor: waveguide adapter online");
-    const desktop = DesktopEnvironment.init();
-    desktop.draw();
+
+    const fb_base: u64 = 0x81000000;
+    if (comptime @import("builtin").os.tag == .freestanding) {
+        const px: [*]u32 = @ptrFromInt(fb_base);
+        const w: u32 = 640;
+        const h: u32 = 480;
+        var i: usize = 0;
+        const total = @as(usize, w) * @as(usize, h);
+        while (i < total) : (i += 1) {
+            px[i] = 0xFF0A0E27;
+        }
+        var y: u32 = 80;
+        while (y < 200) : (y += 1) {
+            var x: u32 = 80;
+            while (x < 560) : (x += 1) {
+                px[@as(usize, y) * w + x] = 0xC022D3EE;
+            }
+        }
+    } else {
+        const desktop = DesktopEnvironment.init();
+        desktop.draw();
+    }
 
     var loops: usize = 0;
     while (loops < 100) : (loops += 1) {
-        const event = DisplayPort.Event{ .vsync = .{ .timestamp_ns = @intCast(loops * 16666666) } };
-        _ = event;
-
+        _ = DisplayPort.Event{ .vsync = .{ .timestamp_ns = @intCast(loops * 16666666) } };
         var layer1 = [_]u32{0xFF0000FF} ** 16;
         var layer2 = [_]u32{0x00FF007F} ** 16;
         var output = [_]u32{0} ** 16;

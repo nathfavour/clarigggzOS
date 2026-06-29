@@ -88,6 +88,12 @@ pub const security = @import("security.zig");
 pub const physical_intent = @import("physical_intent.zig");
 pub const paging = @import("paging.zig");
 pub const rvv = @import("rvv.zig");
+pub const elf_loader = @import("elf_loader.zig");
+pub const plic_dev = @import("plic.zig");
+pub const irq_router_mod = @import("irq_router.zig");
+pub const framebuffer_mod = @import("framebuffer.zig");
+pub const secure_enclave_mod = @import("secure_enclave.zig");
+pub const agent_runtime_mod = @import("agent_runtime.zig");
 
 pub var kernel_heap: memory.KernelHeap = undefined;
 pub const kernel_heap_vtable = std.mem.Allocator.VTable{
@@ -103,6 +109,23 @@ pub var tap_verifier: physical_intent.PhysicalSequenceVerifier = undefined;
 pub var kernel_aspace_storage: paging.AddressSpace = undefined;
 pub var current_thread: ?*scheduler.Thread = null;
 pub var scheduler_ctx: scheduler.CpuContext = .{};
+pub var waveguide_fb: framebuffer_mod.Framebuffer = undefined;
+pub var irq_router: irq_router_mod.IrqRouter = undefined;
+pub var secure_enclave: secure_enclave_mod.SecureEnclave = undefined;
+pub var agent_runtime: agent_runtime_mod.AgentRuntime = undefined;
+pub var clint_dev: plic_dev.Clint = undefined;
+
+fn onAgentIrq() void {
+    agent_runtime.tick();
+}
+
+pub const plic_base = switch (current_hardware) {
+    .qemu_virt => plic_dev.Plic.qemu_virt_base,
+    .spacemit_k1 => plic_dev.Plic.spacemit_k1_base,
+};
+
+pub const clint_base = plic_dev.Clint.qemu_virt_base;
+pub const enclave_base = secure_enclave_mod.SecureEnclave.qemu_virt_base;
 
 const syscall = @import("syscall.zig");
 
@@ -132,6 +155,15 @@ export fn k_trap_handler(scause: u64, sepc: u64, stval: u64, syscall_a0: u64, sy
     const code = scause & 0xFFF;
 
     if (is_interrupt) {
+        const code = scause & 0xFFF;
+        if (comptime builtin.os.tag == .freestanding) {
+            if (code == 9) {
+                irq_router.dispatchPending(&ipc_router, &core_scheduler, onAgentIrq);
+            } else if (code == 5) {
+                irq_router.vsync_count += 1;
+                clint_dev.armTimer(0, 16_666_666);
+            }
+        }
         return sepc;
     }
 
@@ -229,6 +261,17 @@ export fn kmain() noreturn {
         while (true) {}
     };
 
+    // Map PLIC, CLINT, secure enclave MMIO, and waveguide framebuffer
+    if (comptime builtin.os.tag == .freestanding) {
+        kernel_aspace.map(plic_base, plic_base, paging.PTE.Flags.valid | paging.PTE.Flags.read | paging.PTE.Flags.write) catch {};
+        kernel_aspace.map(clint_base, clint_base, paging.PTE.Flags.valid | paging.PTE.Flags.read | paging.PTE.Flags.write) catch {};
+        kernel_aspace.map(enclave_base, enclave_base, paging.PTE.Flags.valid | paging.PTE.Flags.read | paging.PTE.Flags.write) catch {};
+        waveguide_fb = framebuffer_mod.Framebuffer.init(framebuffer_mod.Framebuffer.default_base);
+        waveguide_fb.mapRegion(kernel_aspace) catch {
+            printString("[Panic] Failed to map waveguide framebuffer!\n");
+        };
+    }
+
     // Enable paging: load satp and flush TLB
     if (comptime builtin.cpu.arch == .riscv64 and builtin.os.tag == .freestanding) {
         printString("[Boot] Enabling virtual address translation (satp)...\n");
@@ -257,9 +300,16 @@ export fn kmain() noreturn {
     core_scheduler = scheduler.Scheduler.init();
     printString("[Boot] Scheduler initialized!\n");
 
-    // 4. Initialize Security Subsystems
+    // 4. Initialize Security, IRQ, Agent, and Display subsystems
     security_manager = security.SecurityManager{};
     tap_verifier = physical_intent.PhysicalSequenceVerifier{};
+    secure_enclave = secure_enclave_mod.SecureEnclave.init(enclave_base);
+    irq_router = irq_router_mod.IrqRouter.init(plic_base);
+    clint_dev = plic_dev.Clint.init(clint_base);
+    agent_runtime = agent_runtime_mod.AgentRuntime.init();
+    _ = agent_runtime.register("spatial-planner", 4, 0) catch 0;
+    _ = agent_runtime.register("vision-agent", 6, 0) catch 0;
+    printString("[Boot] Agent runtime online (2 agents)\n");
 
     // 5. Initialize the Root Capability List
     printString("[Boot] Initializing Root CList...\n");
@@ -297,12 +347,38 @@ export fn kmain() noreturn {
     rvv.init();
     rvv.logStatus(printString);
 
-    // 9. Load built-in user-space adapters as kernel threads
+    // 9. Load adapters (ELF blobs first, then built-in symbols)
     if (comptime builtin.os.tag == .freestanding) {
         printString("[Boot] Loading adapters...\n");
         const registry = @import("adapter_registry.zig");
         var loader: registry.Loader = .{};
-        loader.loadAll(&core_scheduler, &ipc_router, kernel_aspace, &registry.builtin_descriptors);
+
+        const embedded = @import("embedded_adapters.zig");
+        for (embedded.blobs) |blob| {
+            loader.loadElfBlob(blob.name, blob.priority, blob.uses_vectors, blob.data, &core_scheduler, &ipc_router, kernel_aspace);
+        }
+
+        if (loader.loaded_count == 0) {
+            loader.loadAll(&core_scheduler, &ipc_router, kernel_aspace, &registry.builtin_descriptors);
+        }
+
+        // Bind IRQ lines to adapter ports by thread id
+        for (loader.loaded[0..loader.loaded_count]) |la| {
+            if (la.thread.id == 3) {
+                _ = irq_router.bind(plic_dev.Plic.IRQ_TACTILE, la.port_id, protocols.input.InputPort.ProtocolID) catch {};
+            }
+            if (la.thread.id == 1) {
+                _ = irq_router.bind(plic_dev.Plic.IRQ_VSYNC, la.port_id, protocols.display.DisplayPort.ProtocolID) catch {};
+            }
+            if (la.thread.id == 4) {
+                _ = irq_router.bind(plic_dev.Plic.IRQ_AGENT, la.port_id, protocols.agent.AgentPort.ProtocolID) catch {};
+            }
+        }
+
+        clint_dev.armTimer(0, 16_666_666);
+        asm volatile ("csrs sstatus, %[sie]" : : [sie] "r" (@as(u64, 1 << 1)));
+        asm volatile ("csrs sie, %[mask]" : : [mask] "r" (@as(u64, (1 << 9) | (1 << 5))));
+
         printString("[Boot] Adapter load complete.\n");
     }
 
@@ -318,6 +394,10 @@ export fn kmain() noreturn {
                 scheduler.switch_context(prev_ctx, &next.ctx);
                 current_thread = prev_thread;
             }
+        }
+
+        if (comptime builtin.os.tag == .freestanding) {
+            irq_router.dispatchPending(&ipc_router, &core_scheduler, onAgentIrq);
         }
 
         if (builtin.cpu.arch == .riscv64) {
