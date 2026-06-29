@@ -1,13 +1,11 @@
 const std = @import("std");
+const builtin = @import("builtin");
 
 /// A deterministic Buddy Allocator for the Clarigggz Core Broker.
-/// Manages memory in power-of-two blocks using free list nodes embedded in free memory.
 pub const KernelHeap = struct {
     heap_start: usize,
     heap_end: usize,
-    free_lists: [15]?*Node, // Orders 0 to 14 (64 bytes to 1MB)
-    // Bitset tracking allocated blocks of order 0 (16384 blocks total for 1MB)
-    // 16384 bits = 2048 bytes. Stored at the very beginning of the heap.
+    free_lists: [15]?*Node,
     allocated_map: []u8,
 
     pub const Node = struct {
@@ -20,8 +18,6 @@ pub const KernelHeap = struct {
     pub fn init(start: usize, size_kb: usize) KernelHeap {
         const total_bytes = size_kb * 1024;
         const end = start + total_bytes;
-
-        // Allocate the allocation bitset map from the start of the heap
         const total_blocks = total_bytes / min_block_size;
         const map_size = (total_blocks + 7) / 8;
 
@@ -35,30 +31,24 @@ pub const KernelHeap = struct {
             .allocated_map = allocated_map,
         };
 
-        // Align the actual allocatable area after the allocated_map
         const alloc_start = (start + map_size + min_block_size - 1) & ~@as(usize, min_block_size - 1);
-        
-        // Mark metadata blocks as allocated in bitset
         const meta_blocks = (alloc_start - start) / min_block_size;
         for (0..meta_blocks) |i| {
             heap.setAllocated(i, true);
         }
 
-        // Initialize free lists with remaining memory blocks
         var current = alloc_start;
         while (current + min_block_size <= end) {
-            // Find the largest power-of-two block size that fits and is aligned
             var order: usize = max_order;
             while (order > 0) : (order -= 1) {
                 const block_size = @as(usize, 1) << @intCast(order + 6);
-                if (current % block_size == 0 and current + block_size <= end) {
+                if (current & (block_size - 1) == 0 and current + block_size <= end) {
                     break;
                 }
             }
             const node = @as(*Node, @ptrFromInt(current));
             node.next = heap.free_lists[order];
             heap.free_lists[order] = node;
-            
             const block_size = @as(usize, 1) << @intCast(order + 6);
             current += block_size;
         }
@@ -86,32 +76,28 @@ pub const KernelHeap = struct {
         if (size <= min_block_size) return 0;
         var s = size - 1;
         var order: usize = 0;
-        s >>= 6; // divide by 64
+        s >>= 6;
         while (s > 0) : (order += 1) {
             s >>= 1;
         }
         return order;
     }
 
-    /// Allocate memory of given size and alignment.
     pub fn alloc(self: *KernelHeap, size: usize, alignment: usize) ?[]u8 {
-        _ = alignment; // Alignment is naturally power-of-two matched by buddy block sizing
+        _ = alignment;
         const req_order = sizeToOrder(size);
         if (req_order > max_order) return null;
 
         var order = req_order;
         while (order <= max_order) : (order += 1) {
             if (self.free_lists[order]) |node| {
-                // Remove from free list
                 self.free_lists[order] = node.next;
 
-                // Split down to required order
                 while (order > req_order) {
                     order -= 1;
                     const block_size = @as(usize, 1) << @intCast(order + 6);
                     const buddy_ptr = @intFromPtr(node) + block_size;
                     const buddy = @as(*Node, @ptrFromInt(buddy_ptr));
-
                     buddy.next = self.free_lists[order];
                     self.free_lists[order] = buddy;
                 }
@@ -129,7 +115,6 @@ pub const KernelHeap = struct {
         return null;
     }
 
-    /// Free allocated block.
     pub fn free(self: *KernelHeap, ptr: []u8) void {
         const ptr_addr = @intFromPtr(ptr.ptr);
         if (ptr_addr < self.heap_start or ptr_addr >= self.heap_end) return;
@@ -157,9 +142,7 @@ pub const KernelHeap = struct {
                 break;
             }
 
-            // Remove buddy from its free list
             if (self.removeFromFreeList(buddy_addr, current_order)) {
-                // Merge buddy
                 if (buddy_addr < current_addr) {
                     current_addr = buddy_addr;
                 }
@@ -204,47 +187,58 @@ pub const KernelHeap = struct {
         };
     }
 
-    fn alloc_adapter(ctx: *anyopaque, len: usize, ptr_align: std.mem.Alignment, ret_addr: usize) ?[*]u8 {
+    pub fn alloc_adapter(ctx: *anyopaque, len: usize, ptr_align: std.mem.Alignment, ret_addr: usize) ?[*]u8 {
         _ = ret_addr;
         const self: *KernelHeap = @ptrCast(@alignCast(ctx));
         const result = self.alloc(len, ptr_align.toByteUnits());
         return if (result) |r| r.ptr else null;
     }
 
-    fn resize_adapter(ctx: *anyopaque, buf: []u8, buf_align: std.mem.Alignment, new_len: usize, ret_addr: usize) bool {
-        _ = ctx; _ = buf; _ = buf_align; _ = new_len; _ = ret_addr;
-        return false; // Resizing not directly supported by buddy allocation without remap
+    pub fn resize_adapter(ctx: *anyopaque, buf: []u8, buf_align: std.mem.Alignment, new_len: usize, ret_addr: usize) bool {
+        _ = ctx;
+        _ = buf;
+        _ = buf_align;
+        _ = new_len;
+        _ = ret_addr;
+        return false;
     }
 
-    fn free_adapter(ctx: *anyopaque, buf: []u8, buf_align: std.mem.Alignment, ret_addr: usize) void {
-        _ = buf_align; _ = ret_addr;
+    pub fn free_adapter(ctx: *anyopaque, buf: []u8, buf_align: std.mem.Alignment, ret_addr: usize) void {
+        _ = buf_align;
+        _ = ret_addr;
         const self: *KernelHeap = @ptrCast(@alignCast(ctx));
         self.free(buf);
     }
 
-    fn remap_adapter(ctx: *anyopaque, buf: []u8, buf_align: std.mem.Alignment, new_len: usize, ret_addr: usize) ?[*]u8 {
-        _ = ctx; _ = buf; _ = buf_align; _ = new_len; _ = ret_addr;
+    pub fn remap_adapter(ctx: *anyopaque, buf: []u8, buf_align: std.mem.Alignment, new_len: usize, ret_addr: usize) ?[*]u8 {
+        _ = ctx;
+        _ = buf;
+        _ = buf_align;
+        _ = new_len;
+        _ = ret_addr;
         return null;
     }
 };
 
+export fn kernel_alloc(len: u64, align_bytes: u64) ?[*]u8 {
+    const main = @import("main.zig");
+    const ptr = main.kernel_heap.alloc(len, align_bytes);
+    return if (ptr) |p| p.ptr else null;
+}
+
 test "Buddy Allocator - Direct Alloc and Free" {
     const allocator = std.testing.allocator;
-    // Simulate raw memory heap (64KB heap)
     const mem_raw = try allocator.alloc(u8, 65536);
     defer allocator.free(mem_raw);
 
     var heap = KernelHeap.init(@intFromPtr(mem_raw.ptr), 64);
-    
-    // Allocate 128 bytes
+
     const block1 = heap.alloc(120, 64).?;
     try std.testing.expect(block1.len == 120);
 
-    // Allocate 512 bytes
     const block2 = heap.alloc(500, 64).?;
     try std.testing.expect(block2.len == 500);
 
-    // Free both
     heap.free(block1);
     heap.free(block2);
 }

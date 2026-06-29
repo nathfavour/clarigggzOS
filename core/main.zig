@@ -4,6 +4,7 @@ const Message = protocols.ipc.Message;
 const config = @import("config");
 
 const builtin = @import("builtin");
+extern fn kernel_alloc(len: u64, align_bytes: u64) ?[*]u8;
 
 // Disable threaded IO dependencies for freestanding RISC-V targets
 pub const std_options_debug_threaded_io: ?*anyopaque = null;
@@ -34,16 +35,6 @@ pub fn Uart16550(comptime base_addr: usize) type {
 
         pub fn init() void {
             IER.* = 0x00; // Disable all interrupts
-            LCR.* = 0x80; // Enable DLAB (divisor latch access bit)
-            
-            // Set divisor latch for baud rate 115200 (divisor = 3)
-            const dll: *volatile u8 = @ptrFromInt(base_addr + 0);
-            const dlm: *volatile u8 = @ptrFromInt(base_addr + 1);
-            dll.* = 0x03;
-            dlm.* = 0x00;
-
-            LCR.* = 0x03; // 8 bits, no parity, one stop bit (DLAB disabled)
-            FCR.* = 0xC7; // Enable FIFO, clear RX/TX FIFO, 14-byte threshold
         }
 
         pub fn putc(c: u8) void {
@@ -96,32 +87,68 @@ pub const scheduler = @import("scheduler.zig");
 pub const security = @import("security.zig");
 pub const physical_intent = @import("physical_intent.zig");
 pub const paging = @import("paging.zig");
+pub const rvv = @import("rvv.zig");
 
 pub var kernel_heap: memory.KernelHeap = undefined;
+pub const kernel_heap_vtable = std.mem.Allocator.VTable{
+    .alloc = memory.KernelHeap.alloc_adapter,
+    .resize = memory.KernelHeap.resize_adapter,
+    .remap = memory.KernelHeap.remap_adapter,
+    .free = memory.KernelHeap.free_adapter,
+};
 pub var ipc_router: ipc_transport.Router = undefined;
 pub var core_scheduler: scheduler.Scheduler = undefined;
 pub var security_manager: security.SecurityManager = undefined;
 pub var tap_verifier: physical_intent.PhysicalSequenceVerifier = undefined;
+pub var kernel_aspace_storage: paging.AddressSpace = undefined;
+pub var current_thread: ?*scheduler.Thread = null;
+pub var scheduler_ctx: scheduler.CpuContext = .{};
 
 const syscall = @import("syscall.zig");
 
+pub fn handlePhysicalIntent(tap_id: u16, timestamp: u64, biometric: bool) void {
+    security_manager.handleTactileEvent(&tap_verifier, tap_id, timestamp, biometric, printString);
+}
+
+pub fn printHex(val: u64) void {
+    const chars = "0123456789ABCDEF";
+    var i: usize = 0;
+    printString("0x");
+    while (i < 16) : (i += 1) {
+        const shift = @as(u6, @intCast((15 - i) * 4));
+        const nibble = (val >> shift) & 0xF;
+        const c = chars[nibble];
+        if (comptime builtin.os.tag == .freestanding) {
+            system_uart.putc(c);
+        } else {
+            std.debug.print("{c}", .{c});
+        }
+    }
+}
+
 /// The primary trap handler called from arch/riscv64/k1/trap.S
-export fn k_trap_handler(scause: u64, sepc: u64, stval: u64) void {
+export fn k_trap_handler(scause: u64, sepc: u64, stval: u64, syscall_a0: u64, syscall_a1: u64, syscall_a2: u64, syscall_a3: u64) u64 {
     const is_interrupt = (scause >> 63) == 1;
     const code = scause & 0xFFF;
 
     if (is_interrupt) {
-        // Handle Hardware Interrupts (PLIC/CLINT)
-    } else {
-        // Handle Synchronous Traps (Syscalls, Faults)
-        if (code == 8 or code == 9) { // Environment Call (User or Supervisor)
-            _ = syscall.Dispatcher.handle(0, 0, 0, 0);
-            _ = sepc;
-        } else {
-            while (true) {} // Kernel Panic
-        }
+        return sepc;
     }
-    _ = stval;
+
+    if (code == 8 or code == 9) {
+        _ = syscall.Dispatcher.handle(syscall_a0, syscall_a1, syscall_a2, syscall_a3);
+        return sepc + 4;
+    }
+
+    printString("\n!!! KERNEL PANIC: CPU EXCEPTION !!!\n");
+    printString("scause: ");
+    printHex(scause);
+    printString("\nsepc:   ");
+    printHex(sepc);
+    printString("\nstval:  ");
+    printHex(stval);
+    printString("\n");
+    while (true) {}
 }
 
 pub fn printString(str: []const u8) void {
@@ -170,18 +197,25 @@ export fn kmain() noreturn {
 
     // 1. Initialize Kernel Heap (1MB for early boot)
     kernel_heap = memory.KernelHeap.init(0x80500000, 1024);
-    const allocator = kernel_heap.allocator();
+    const allocator = std.mem.Allocator{
+        .ptr = &kernel_heap,
+        .vtable = &kernel_heap_vtable,
+    };
 
     // Initialize Paging (SV39)
     printString("[Boot] Initializing Sv39 Virtual Memory Page Tables...\n");
-    var kernel_aspace = paging.AddressSpace.init(allocator) catch {
-        printString("[Panic] Failed to initialize kernel page table!\n");
-        while (true) {}
+    const proto = struct {
+        extern fn paging_init(out: *paging.AddressSpace, allocator_ptr: *anyopaque, allocator_vtable: *const std.mem.Allocator.VTable) void;
     };
+    proto.paging_init(&kernel_aspace_storage, &kernel_heap, &kernel_heap_vtable);
+    const kernel_aspace = &kernel_aspace_storage;
 
     // Identity map kernel memory: 0x80000000 up to 0x80800000 (8MB) to cover OpenSBI, Kernel, and Heap
     var page_addr: u64 = 0x80000000;
     while (page_addr < 0x80800000) : (page_addr += 4096) {
+        if (comptime builtin.os.tag == .freestanding) {
+            system_uart.putc('.');
+        }
         kernel_aspace.map(page_addr, page_addr, paging.PTE.Flags.valid | paging.PTE.Flags.read | paging.PTE.Flags.write | paging.PTE.Flags.exec) catch {
             printString("[Panic] Failed to map kernel code region!\n");
             while (true) {}
@@ -209,43 +243,83 @@ export fn kmain() noreturn {
     printString("[Boot] Virtual memory paging successfully activated!\n");
 
     // 2. Initialize the IPC Router
-    ipc_router = ipc_transport.Router.init(allocator);
+    printString("[Boot] Initializing IPC Router...\n");
+    ipc_router = if (comptime builtin.os.tag == .freestanding)
+        ipc_transport.Router.initKernel()
+    else if (builtin.is_test)
+        ipc_transport.Router.init(std.testing.allocator)
+    else
+        ipc_transport.Router.initKernel();
+    printString("[Boot] IPC Router initialized!\n");
 
     // 3. Initialize the Scheduler
-    core_scheduler = scheduler.Scheduler.init(allocator);
-
+    printString("[Boot] Initializing Scheduler...\n");
+    core_scheduler = scheduler.Scheduler.init();
+    printString("[Boot] Scheduler initialized!\n");
 
     // 4. Initialize Security Subsystems
     security_manager = security.SecurityManager{};
     tap_verifier = physical_intent.PhysicalSequenceVerifier{};
 
     // 5. Initialize the Root Capability List
-    var root_clist = capability.CList.init(allocator, 64, 0) catch {
-        while (true) {} // Kernel Panic: Failed to init root CList
-    };
+    printString("[Boot] Initializing Root CList...\n");
+    var root_clist: capability.CList = undefined;
+    capability.CList.init(&root_clist, 64, 0);
+    printString("[Boot] Root CList initialized!\n");
 
     // 6. Create the first system thread (Primary Manager)
-    const root_thread = allocator.create(scheduler.Thread) catch {
-        while (true) {} // Kernel Panic
+    printString("[Boot] Creating root thread...\n");
+    const root_thread = if (comptime builtin.is_test) (allocator.create(scheduler.Thread) catch {
+        printString("[Panic] Failed to create root thread\n");
+        while (true) {}
+    }) else blk: {
+        const raw = kernel_alloc(@sizeOf(scheduler.Thread), @alignOf(scheduler.Thread)) orelse {
+            printString("[Panic] Out of memory creating root thread!\n");
+            while (true) {}
+        };
+        break :blk @as(*scheduler.Thread, @ptrCast(@alignCast(raw)));
     };
-    root_thread.* = scheduler.Thread.init(0, &root_clist, null, 0x807FFFFF, 0x80200000);
+    root_thread.* = scheduler.Thread.init(0, &root_clist, null, 0x807FFFFF, 0);
+    root_thread.priority = 255;
     core_scheduler.addThread(root_thread) catch {};
+    printString("[Boot] Root thread created!\n");
 
     // 7. Create an initial system port
+    printString("[Boot] Creating root port...\n");
     _ = ipc_router.createPort(0, &root_clist) catch {
-        while (true) {} // Kernel Panic: Failed to create root port
+        printString("[Panic] Failed to create root port\n");
+        while (true) {}
     };
+    printString("[Boot] Root port created!\n");
 
-    // Core Loop: Dispatching to IPC routing and the scheduler.
+    // 8. Initialize RVV 1.0 vector unit
+    printString("[Boot] Initializing RVV 1.0...\n");
+    rvv.init();
+    rvv.logStatus(printString);
+
+    // 9. Load built-in user-space adapters as kernel threads
+    if (comptime builtin.os.tag == .freestanding) {
+        printString("[Boot] Loading adapters...\n");
+        const registry = @import("adapter_registry.zig");
+        var loader: registry.Loader = .{};
+        loader.loadAll(&core_scheduler, &ipc_router, kernel_aspace, &registry.builtin_descriptors);
+        printString("[Boot] Adapter load complete.\n");
+    }
+
+    printString("[Boot] Entering realtime scheduler loop...\n");
+
+    // Core Loop: priority scheduling with cooperative context switch
     while (true) {
-        // Find next thread to run
-        if (core_scheduler.schedule()) |next_thread| {
-            _ = next_thread;
-            // TODO: Assembly-level context switch call
+        if (core_scheduler.schedule()) |next| {
+            if (next.id != 0) {
+                const prev_thread = current_thread;
+                const prev_ctx = if (prev_thread) |t| &t.ctx else &scheduler_ctx;
+                current_thread = next;
+                scheduler.switch_context(prev_ctx, &next.ctx);
+                current_thread = prev_thread;
+            }
         }
 
-        // Article I: The Power Budget
-        // Wait For Interrupt (WFI / HLT)
         if (builtin.cpu.arch == .riscv64) {
             asm volatile ("wfi");
         } else if (builtin.cpu.arch == .x86_64) {
@@ -260,24 +334,22 @@ pub fn main() void {
 
 test "IPC Router - Port Creation and Message Delivery" {
     const allocator = std.testing.allocator;
-    
-    // 1. Setup subsystems
+
     var router = ipc_transport.Router.init(allocator);
     defer {
-        var it = router.ports.iterator();
-        while (it.next()) |entry| {
-            allocator.destroy(entry.value_ptr.*);
+        for (router.ports[0..router.ports_count]) |maybe_port| {
+            if (maybe_port) |port| {
+                allocator.destroy(port);
+            }
         }
-        router.ports.deinit();
     }
 
-    var clist = try capability.CList.init(allocator, 4, 1);
+    var clist: capability.CList = undefined;
+    capability.CList.initTest(&clist, allocator, 4, 1);
     defer allocator.free(clist.caps);
 
-    // 2. Create a port
     const port_id = try router.createPort(1, &clist);
-    
-    // 3. Grant capability to send to this port
+
     clist.caps[0] = .{
         .cap_type = .ipc_endpoint,
         .rights = capability.Capability.Rights.write,
@@ -286,10 +358,8 @@ test "IPC Router - Port Creation and Message Delivery" {
         .limit = 0,
     };
 
-    var sched = scheduler.Scheduler.init(allocator);
-    defer sched.deinit();
+    var sched = scheduler.Scheduler.init();
 
-    // 4. Send a message
     const msg = protocols.ipc.Message{
         .sender_id = 1,
         .protocol_id = 42,
@@ -300,8 +370,7 @@ test "IPC Router - Port Creation and Message Delivery" {
 
     try router.deliver(&clist, 0, msg, 1, &sched);
 
-    // 5. Verify delivery
-    const port = router.ports.get(port_id).?;
+    const port = router.ports[port_id].?;
     const delivered = port.pop().?;
     try std.testing.expectEqual(delivered.protocol_id, 42);
 }

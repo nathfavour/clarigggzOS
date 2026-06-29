@@ -1,4 +1,6 @@
 const std = @import("std");
+extern fn kernel_alloc(len: u64, align_bytes: u64) ?[*]u8;
+
 
 /// The types of capabilities supported by the Clarigggz microkernel.
 pub const CapType = enum(u8) {
@@ -63,8 +65,18 @@ pub const CList = struct {
     caps: []Capability,
     owner_id: u32,
 
-    pub fn init(allocator: std.mem.Allocator, max_caps: usize, owner: u32) !CList {
-        const caps = try allocator.alloc(Capability, max_caps);
+    pub fn init(out: *CList, comptime max_caps: usize, owner: u32) void {
+        const print = @import("main.zig").printString;
+        print("    [CList.init] Start\n");
+        const byte_count = comptime max_caps * @sizeOf(Capability);
+        print("    [CList.init] Allocating...\n");
+        const raw = kernel_alloc(byte_count, @alignOf(Capability)) orelse {
+            print("[Panic] Out of memory allocating CList!\n");
+            while (true) {}
+        };
+        print("    [CList.init] Allocated!\n");
+        const caps = @as([*]Capability, @ptrCast(@alignCast(raw)))[0..max_caps];
+        print("    [CList.init] Memsetting...\n");
         @memset(caps, Capability{
             .cap_type = .none,
             .rights = 0,
@@ -72,7 +84,26 @@ pub const CList = struct {
             .base = 0,
             .limit = 0,
         });
-        return CList{
+        print("    [CList.init] Writing to out...\n");
+        out.* = CList{
+            .caps = caps,
+            .owner_id = owner,
+        };
+        print("    [CList.init] End\n");
+    }
+
+    pub fn initTest(out: *CList, allocator: std.mem.Allocator, max_caps: usize, owner: u32) void {
+        const caps = allocator.alloc(Capability, max_caps) catch {
+            @panic("Out of memory allocating CList");
+        };
+        @memset(caps, Capability{
+            .cap_type = .none,
+            .rights = 0,
+            .object_id = 0,
+            .base = 0,
+            .limit = 0,
+        });
+        out.* = CList{
             .caps = caps,
             .owner_id = owner,
         };
@@ -120,10 +151,12 @@ pub const CList = struct {
 test "Capability System - Derivation, Grant, Validation, and Revocation" {
     const allocator = std.testing.allocator;
 
-    var clist_a = try CList.init(allocator, 8, 1);
+    var clist_a: CList = undefined;
+    CList.initTest(&clist_a, allocator, 8, 1);
     defer allocator.free(clist_a.caps);
 
-    var clist_b = try CList.init(allocator, 8, 2);
+    var clist_b: CList = undefined;
+    CList.initTest(&clist_b, allocator, 8, 2);
     defer allocator.free(clist_b.caps);
 
     // Setup memory capability in A

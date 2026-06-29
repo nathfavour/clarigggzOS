@@ -1,35 +1,52 @@
 const std = @import("std");
 const protocols = @import("protocols");
 const InputPort = protocols.input.InputPort;
+const runtime = protocols.runtime;
 
-// Disable threaded IO dependencies for freestanding targets
 pub const std_options_debug_threaded_io: ?*anyopaque = null;
 
+fn adapterMain() void {
+    runtime.log("tactile-id: biometric adapter online");
 
-/// Tactile ID Server: Biometric and Physical Intent Verification.
-/// An unprivileged user-space adapter server.
-pub fn main() !void {
-    // 1. Initialize Biometric Engine
-    // In a real system, this would wait for raw sensor data from MMIO.
-    
-    // 2. Main Event Loop
-    while (true) {
-        // Simulated local pattern recognition (80% Pareto offline).
-        // Verification of "Intent-to-Unlock" (Article IV).
-        
-        // Example: Success verification event
-        const biometric_result = InputPort.Event{
-            .biometric = .{
-                .verified = true,
-                .user_id = 1,
-                .confidence = 0.99,
-            },
-        };
-        _ = biometric_result;
+    const unlock_sequence = [_]u16{ 1, 3, 2, 4 };
+    var loops: usize = 0;
+    while (loops < 200) : (loops += 1) {
+        if (loops < unlock_sequence.len) {
+            const tap = unlock_sequence[loops];
+            const event = InputPort.Event{
+                .biometric = .{
+                    .verified = loops == unlock_sequence.len - 1,
+                    .user_id = 1,
+                    .confidence = 0.99,
+                },
+            };
+            _ = event;
+            runtime.submitIntent(tap, @intCast(loops * 100_000_000), loops == unlock_sequence.len - 1);
+        }
+        runtime.yield();
     }
 }
 
-export fn _start() callconv(.c) noreturn {
-    _ = main() catch {};
-    while (true) {}
+pub export fn clarigggz_tactile_entry() callconv(.c) noreturn {
+    adapterMain();
+    while (true) {
+        runtime.yield();
+    }
+}
+
+const builtin = @import("builtin");
+const config = @import("config");
+
+fn startShim() callconv(.c) noreturn {
+    clarigggz_tactile_entry();
+}
+
+comptime {
+    if (builtin.os.tag == .freestanding and !config.kernel_adapter) {
+        @export(&startShim, .{ .name = "_start", .linkage = .strong });
+    }
+}
+
+pub fn main() !void {
+    adapterMain();
 }

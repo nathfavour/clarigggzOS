@@ -7,7 +7,7 @@ pub fn build(b: *std.Build) void {
             .cpu_arch = .riscv64,
             .os_tag = .freestanding,
             .cpu_model = .{ .explicit = &std.Target.riscv.cpu.generic_rv64 },
-            .cpu_features_add = std.Target.riscv.featureSet(&.{.v}), // Enable RVV 1.0 (vector extensions)
+            .cpu_features_add = std.Target.riscv.featureSet(&.{.v}),
         },
     });
     const optimize = b.standardOptimizeOption(.{});
@@ -25,6 +25,13 @@ pub fn build(b: *std.Build) void {
 
     const options = b.addOptions();
     options.addOption([]const u8, "hardware", hw_target);
+    options.addOption(bool, "kernel_adapter", false);
+    const options_mod = options.createModule();
+
+    const kernel_adapter_options = b.addOptions();
+    kernel_adapter_options.addOption([]const u8, "hardware", hw_target);
+    kernel_adapter_options.addOption(bool, "kernel_adapter", true);
+    const kernel_adapter_options_mod = kernel_adapter_options.createModule();
 
     // --- Modules ---
     const protocols_module = b.addModule("protocols", .{
@@ -67,6 +74,25 @@ pub fn build(b: *std.Build) void {
     }
 
     kernel_exe.root_module.addImport("protocols", protocols_module);
+
+    const adapter_modules = [_]struct { name: []const u8, path: []const u8 }{
+        .{ .name = "compositor_adapter", .path = "components/compositor/main.zig" },
+        .{ .name = "neural_adapter", .path = "components/neural/main.zig" },
+        .{ .name = "tactile_adapter", .path = "components/tactile_id/main.zig" },
+    };
+    var adapter_mods: [adapter_modules.len]*std.Build.Module = undefined;
+    for (adapter_modules, 0..) |am, i| {
+        const mod = b.createModule(.{
+            .root_source_file = b.path(am.path),
+            .target = target,
+            .optimize = optimize,
+        });
+        mod.addImport("protocols", protocols_module);
+        mod.addImport("config", kernel_adapter_options_mod);
+        adapter_mods[i] = mod;
+        kernel_exe.root_module.addImport(am.name, mod);
+    }
+
     kernel_exe.lto = .none;
 
     const install_kernel = b.addInstallArtifact(kernel_exe, .{});
@@ -107,6 +133,7 @@ pub fn build(b: *std.Build) void {
             }),
         });
         comp_exe.root_module.addImport("protocols", protocols_module);
+        comp_exe.root_module.addImport("config", options_mod);
         const install_comp = b.addInstallArtifact(comp_exe, .{});
         components_step.dependOn(&install_comp.step);
     }

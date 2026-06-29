@@ -2,10 +2,10 @@
 # Clarigggz OS - Core Broker
 
 .section .text
-.global switch_context
+.global riscv_switch_context
 
-# switch_context(old_context: *Context, new_context: *Context)
-switch_context:
+# riscv_switch_context(old_context: *Context, new_context: *Context)
+riscv_switch_context:
     # 1. Save old context
     sd ra, 0(a0)
     sd sp, 8(a0)

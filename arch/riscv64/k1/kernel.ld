@@ -17,6 +17,7 @@ SECTIONS {
 
     .data : {
         *(.data .data.*)
+        PROVIDE(__global_pointer$ = . + 0x800);
     }
 
     .bss : {

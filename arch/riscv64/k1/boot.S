@@ -5,24 +5,27 @@
 .global _start
 
 _start:
-    # 1. HART Initialization (Multi-core awareness)
-    csrr t0, mhartid
-    bnez t0, secondary_hart_park # Only HART 0 continues, others park
+    # Initialize Global Pointer (gp) with relaxation disabled for this instruction
+    .option push
+    .option norelax
+    la gp, __global_pointer$
+    .option pop
 
-    # 2. Disable Interrupts initially
-    csrci mstatus, 8
+    # 1. Disable Interrupts initially in sstatus (SIE bit 1 is cleared)
+    # We clear the SIE bit to prevent early interrupts before configuration
+    li t0, 2
+    csrc sstatus, t0
 
-    # 3. Enable Vector Extension (RVV 1.0)
-    # mstatus[VS] = 11 (Initial) or 01 (Initial)
-    # We set it to 'Initial' (01) to allow RVV instructions
-    li t1, 0x00000600 # VS bits in mstatus
-    csrs mstatus, t1
+    # 2. Enable Vector Extension (RVV 1.0) in sstatus
+    # We set the VS bits (bits 9-10) to Initial (01) or Dirty (11) status
+    li t1, 0x00000600
+    csrs sstatus, t1
 
-    # 4. Register Trap Vector
+    # 3. Register S-Mode Trap Vector
     la t0, trap_entry
     csrw stvec, t0
 
-    # 5. Initialize Stack Pointer
+    # 4. Initialize Stack Pointer
     la sp, _boot_stack_top
 
     # 5. Zero out BSS
@@ -39,8 +42,8 @@ jump_to_zig:
     call kmain
 
 secondary_hart_park:
-    # Article I: The Power Budget
-    # All non-primary cores must immediately WFI until woken by the Core Broker.
+    # In S-Mode under OpenSBI, secondary HARTs are parked by default.
+    # If any awake, put them to sleep.
     wfi
     j secondary_hart_park
 

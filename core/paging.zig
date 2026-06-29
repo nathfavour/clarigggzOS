@@ -1,4 +1,7 @@
 const std = @import("std");
+const builtin = @import("builtin");
+
+extern fn kernel_alloc(len: u64, align_bytes: u64) ?[*]u8;
 
 /// SV39 Page Table Entry (PTE) for RISC-V 64-bit.
 pub const PTE = packed struct(u64) {
@@ -37,13 +40,17 @@ pub const AddressSpace = struct {
     pub const PageSize = 4096;
 
     pub fn init(allocator: std.mem.Allocator) !AddressSpace {
-        // Allocate 4KB aligned root page table (512 entries)
-        const ptr = try allocator.alloc(PTE, 512);
-        @memset(ptr, @bitCast(@as(u64, 0)));
-        return AddressSpace{
-            .root_page_table = ptr.ptr,
-            .allocator = allocator,
-        };
+        if (comptime builtin.is_test) {
+            const table = try allocator.alloc(PTE, 512);
+            @memset(table, @bitCast(@as(u64, 0)));
+            return .{
+                .root_page_table = table.ptr,
+                .allocator = allocator,
+            };
+        }
+        var space: AddressSpace = undefined;
+        paging_init(&space, allocator.ptr, allocator.vtable);
+        return space;
     }
 
     /// Recursively free all non-leaf page tables under a page table directory.
@@ -78,9 +85,14 @@ pub const AddressSpace = struct {
             return @ptrFromInt(@as(u64, parent_pte.ppn) << 12);
         }
 
-        // Allocate a new level page table
-        const new_table = try self.allocator.alloc(PTE, 512);
-        @memset(new_table, @bitCast(@as(u64, 0)));
+        const new_table = if (comptime builtin.is_test) blk: {
+            const table = try self.allocator.alloc(PTE, 512);
+            @memset(table, @bitCast(@as(u64, 0)));
+            break :blk table;
+        } else blk: {
+            const raw_ptr = kernel_alloc(512 * @sizeOf(PTE), 4096) orelse return error.OutOfMemory;
+            break :blk @as([*]PTE, @ptrCast(@alignCast(raw_ptr)))[0..512];
+        };
 
         parent_pte.* = .{
             .v = true,
@@ -182,6 +194,23 @@ pub const AddressSpace = struct {
         return (mode << 60) | ppn;
     }
 };
+
+pub export fn paging_init(out: *AddressSpace, allocator_ptr: *anyopaque, allocator_vtable: *const std.mem.Allocator.VTable) void {
+    const raw_ptr = kernel_alloc(512 * @sizeOf(PTE), 4096) orelse {
+        const print = @import("main.zig").printString;
+        print("[Panic] Out of memory allocating root page table!\n");
+        while (true) {}
+    };
+    const ptr = @as([*]PTE, @ptrCast(@alignCast(raw_ptr)))[0..512];
+    @memset(ptr, @bitCast(@as(u64, 0)));
+    out.* = AddressSpace{
+        .root_page_table = ptr.ptr,
+        .allocator = .{
+            .ptr = allocator_ptr,
+            .vtable = allocator_vtable,
+        },
+    };
+}
 
 test "SV39 Paging - Map, Translate, Unmap" {
     const allocator = std.testing.allocator;

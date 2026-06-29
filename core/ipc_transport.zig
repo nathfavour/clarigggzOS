@@ -2,7 +2,9 @@ const std = @import("std");
 const capability = @import("capability.zig");
 const scheduler = @import("scheduler.zig");
 const protocols = @import("protocols");
+const builtin = @import("builtin");
 const Message = protocols.ipc.Message;
+extern fn kernel_alloc(len: u64, align_bytes: u64) ?[*]u8;
 
 /// A Port is a kernel-managed endpoint for IPC.
 pub const Port = struct {
@@ -43,19 +45,38 @@ pub const Port = struct {
 
 /// The IPC Router manages all Ports and ensures capability checks.
 pub const Router = struct {
-    ports: std.AutoHashMap(u32, *Port),
+    ports: [128]?*Port,
+    ports_count: usize,
     allocator: std.mem.Allocator,
 
     pub fn init(allocator: std.mem.Allocator) Router {
         return .{
-            .ports = std.AutoHashMap(u32, *Port).init(allocator),
+            .ports = [_]?*Port{null} ** 128,
+            .ports_count = 0,
             .allocator = allocator,
         };
     }
 
+    pub fn initKernel() Router {
+        return .{
+            .ports = [_]?*Port{null} ** 128,
+            .ports_count = 0,
+            .allocator = undefined,
+        };
+    }
+
     pub fn createPort(self: *Router, owner_id: u32, receiver_clist: *capability.CList) !u32 {
-        const port_id = @as(u32, @intCast(self.ports.count())); // Simple ID generation
-        const port = try self.allocator.create(Port);
+        if (self.ports_count >= 128) return error.NoFreePorts;
+        const port_id = @as(u32, @intCast(self.ports_count));
+        
+        var port: *Port = undefined;
+        if (comptime builtin.is_test or builtin.os.tag != .freestanding) {
+            port = try self.allocator.create(Port);
+        } else {
+            const raw = kernel_alloc(@sizeOf(Port), @alignOf(Port)) orelse return error.OutOfMemory;
+            port = @as(*Port, @ptrCast(@alignCast(raw)));
+        }
+
         port.* = .{
             .id = port_id,
             .owner_id = owner_id,
@@ -65,7 +86,8 @@ pub const Router = struct {
             .tail = 0,
             .count = 0,
         };
-        try self.ports.put(port_id, port);
+        self.ports[port_id] = port;
+        self.ports_count += 1;
         return port_id;
     }
 
@@ -77,7 +99,8 @@ pub const Router = struct {
         if (cap.cap_type != .ipc_endpoint) return error.WrongCapType;
         if ((cap.rights & capability.Capability.Rights.write) == 0) return error.NoWriteAccess;
 
-        const port = self.ports.get(@as(u32, @intCast(cap.object_id))) orelse return error.PortNotFound;
+        if (cap.object_id >= self.ports.len) return error.PortNotFound;
+        const port = self.ports[cap.object_id] orelse return error.PortNotFound;
         
         if (port.isFull()) {
             // Block sender on this port
@@ -99,7 +122,8 @@ pub const Router = struct {
         if (cap.cap_type != .ipc_endpoint) return error.WrongCapType;
         if ((cap.rights & capability.Capability.Rights.read) == 0) return error.NoReadAccess;
 
-        const port = self.ports.get(@as(u32, @intCast(cap.object_id))) orelse return error.PortNotFound;
+        if (cap.object_id >= self.ports.len) return error.PortNotFound;
+        const port = self.ports[cap.object_id] orelse return error.PortNotFound;
 
         if (port.isEmpty()) {
             // Block receiver on this port
@@ -121,20 +145,22 @@ test "IPC Router - Port Blocking and Wakeup" {
 
     var router = Router.init(allocator);
     defer {
-        var it = router.ports.iterator();
-        while (it.next()) |entry| {
-            allocator.destroy(entry.value_ptr.*);
+        for (router.ports[0..router.ports_count]) |maybe_port| {
+            if (maybe_port) |port| {
+                allocator.destroy(port);
+            }
         }
-        router.ports.deinit();
     }
 
-    var clist_sender = try capability.CList.init(allocator, 4, 1);
+    var clist_sender: capability.CList = undefined;
+    capability.CList.initTest(&clist_sender, allocator, 4, 1);
     defer allocator.free(clist_sender.caps);
 
-    var clist_receiver = try capability.CList.init(allocator, 4, 2);
+    var clist_receiver: capability.CList = undefined;
+    capability.CList.initTest(&clist_receiver, allocator, 4, 2);
     defer allocator.free(clist_receiver.caps);
 
-    var sched = scheduler.Scheduler.init(allocator);
+    var sched = scheduler.Scheduler.init();
     defer sched.deinit();
 
     var t_sender = scheduler.Thread.init(1, &clist_sender, null, 0x1000, 0x500);
