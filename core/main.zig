@@ -169,7 +169,7 @@ export fn kmain() noreturn {
     printString("\n");
 
     // 1. Initialize Kernel Heap (1MB for early boot)
-    kernel_heap = memory.KernelHeap.init(0x80100000, 1024);
+    kernel_heap = memory.KernelHeap.init(0x80500000, 1024);
     const allocator = kernel_heap.allocator();
 
     // Initialize Paging (SV39)
@@ -179,9 +179,9 @@ export fn kmain() noreturn {
         while (true) {}
     };
 
-    // Identity map kernel memory: 0x80000000 up to 0x80400000 (4MB)
+    // Identity map kernel memory: 0x80000000 up to 0x80800000 (8MB) to cover OpenSBI, Kernel, and Heap
     var page_addr: u64 = 0x80000000;
-    while (page_addr < 0x80400000) : (page_addr += 4096) {
+    while (page_addr < 0x80800000) : (page_addr += 4096) {
         kernel_aspace.map(page_addr, page_addr, paging.PTE.Flags.valid | paging.PTE.Flags.read | paging.PTE.Flags.write | paging.PTE.Flags.exec) catch {
             printString("[Panic] Failed to map kernel code region!\n");
             while (true) {}
@@ -228,7 +228,7 @@ export fn kmain() noreturn {
     const root_thread = allocator.create(scheduler.Thread) catch {
         while (true) {} // Kernel Panic
     };
-    root_thread.* = scheduler.Thread.init(0, &root_clist, null, 0x801FFFFF, 0x80000000);
+    root_thread.* = scheduler.Thread.init(0, &root_clist, null, 0x807FFFFF, 0x80200000);
     core_scheduler.addThread(root_thread) catch {};
 
     // 7. Create an initial system port

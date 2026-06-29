@@ -3,8 +3,8 @@
 ENTRY(_start)
 
 SECTIONS {
-    /* Typical start for RISC-V bare-metal firmware/kernels */
-    . = 0x80000000;
+    /* OpenSBI next address is 0x80200000 */
+    . = 0x80200000;
 
     .text : {
         KEEP(*(.text.boot))
