@@ -194,6 +194,19 @@ pub fn build(b: *std.Build) void {
     const bin_step = b.step("bin", "Generate raw binary clarigggz.bin for QEMU");
     bin_step.dependOn(&objcopy.step);
 
+    // QEMU smoke run for fast bring-up iteration.
+    const qemu_run = b.addSystemCommand(&.{
+        "sh",
+        "-c",
+        b.fmt(
+            "timeout 12 qemu-system-riscv64 -M virt -cpu rv64,v=true -smp 1 -m 512M -bios default -kernel {s} -nographic -serial mon:stdio; rc=$?; if [ \"$rc\" -eq 124 ]; then exit 0; fi; exit \"$rc\"",
+            .{bin_out_path},
+        ),
+    });
+    qemu_run.step.dependOn(&objcopy.step);
+    const qemu_step = b.step("qemu", "Run Clarigggz on QEMU virt (RVV enabled)");
+    qemu_step.dependOn(&qemu_run.step);
+
     const compositor_module = b.addModule("compositor", .{
         .root_source_file = b.path("components/compositor/main.zig"),
     });

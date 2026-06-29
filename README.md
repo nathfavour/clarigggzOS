@@ -128,13 +128,19 @@ zig build bin -Dhardware=spacemit_k1    # SpacemiT K1 UART @ 0xD8000000
 ```bash
 qemu-system-riscv64 \
   -M virt \
-  -cpu rv64 \
+  -cpu rv64,v=true \
   -smp 8 \
   -m 2G \
   -bios default \
   -kernel zig-out/bin/clarigggz.bin \
   -nographic \
   -serial mon:stdio
+```
+
+Or use the built-in smoke loop:
+
+```bash
+zig build qemu
 ```
 
 ### Other build targets
